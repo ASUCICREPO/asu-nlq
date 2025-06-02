@@ -2,17 +2,17 @@ import React, { useState } from 'react';
 import { Box, TextField, IconButton, Paper } from '@mui/material';
 import { Send } from '@mui/icons-material';
 
-const MessageInput = ({ onSendMessage }) => {
+const MessageInput = ({ onSendMessage, disabled = false }) => {
   const [inputText, setInputText] = useState('');
   const [isDisabled, setIsDisabled] = useState(false);
 
   const handleSend = async () => {
     const message = inputText.trim();
-    if (!message) return;
+    if (!message || disabled) return;
 
     setIsDisabled(true);
     setInputText('');
-    
+
     try {
       await onSendMessage(message);
     } catch (error) {
@@ -24,7 +24,7 @@ const MessageInput = ({ onSendMessage }) => {
   };
 
   const handleKeyPress = (event) => {
-    if (event.key === 'Enter' && !event.shiftKey) {
+    if (event.key === 'Enter' && !event.shiftKey && !disabled) {
       event.preventDefault();
       handleSend();
     }
@@ -33,6 +33,8 @@ const MessageInput = ({ onSendMessage }) => {
   const handleInputChange = (event) => {
     setInputText(event.target.value);
   };
+
+  const isInputDisabled = isDisabled || disabled;
 
   return (
     <Paper
@@ -55,11 +57,11 @@ const MessageInput = ({ onSendMessage }) => {
           multiline
           maxRows={4}
           variant="outlined"
-          placeholder="Type your message..."
+          placeholder={disabled ? "Waiting for response..." : "Type your message..."}
           value={inputText}
           onChange={handleInputChange}
           onKeyPress={handleKeyPress}
-          disabled={isDisabled}
+          disabled={isInputDisabled}
           sx={{
             '& .MuiOutlinedInput-root': {
               borderRadius: 3
@@ -69,7 +71,7 @@ const MessageInput = ({ onSendMessage }) => {
         <IconButton
           color="primary"
           onClick={handleSend}
-          disabled={isDisabled || !inputText.trim()}
+          disabled={isInputDisabled || !inputText.trim()}
           sx={{
             bgcolor: 'primary.main',
             color: 'white',

@@ -6,6 +6,7 @@ class WebSocketManager {
     this.isConnected = false;
     this.isConnecting = false;
     this.messageCallback = null;
+    this.currentMessage = ''; // Track the current streaming message
   }
 
   // Connect to WebSocket
@@ -17,7 +18,7 @@ class WebSocketManager {
       }
 
       this.isConnecting = true;
-      
+
       try {
         this.ws = new WebSocket(WEBSOCKET_API);
 
@@ -45,16 +46,11 @@ class WebSocketManager {
           console.log('WebSocket message received:', event.data);
           try {
             const data = JSON.parse(event.data);
-            if (data.message && this.messageCallback) {
-              this.messageCallback(data.message);
-            }
-            // Close connection after receiving one packet
-            this.close();
+            this.handleStreamingMessage(data);
           } catch (error) {
             console.error('Error parsing WebSocket message:', error);
           }
         };
-
       } catch (error) {
         this.isConnecting = false;
         reject(error);
@@ -62,8 +58,40 @@ class WebSocketManager {
     });
   }
 
+  // Handle different types of streaming messages
+  handleStreamingMessage(data) {
+    if (data.type === 'messageStart') {
+      // Reset current message for new message
+      this.currentMessage = '';
+      console.log('Message start received');
+    } 
+    else if (data.type === 'contentBlockDelta') {
+      // Extract delta text and add to current message
+      const deltaText = data.data.delta.text;
+      this.currentMessage += deltaText;
+
+      // Update the UI with the current accumulated message
+      if (this.messageCallback) {
+        this.messageCallback(this.currentMessage);
+      }
+      
+    }
+    else if (data.type === 'messageStop') {
+      // Message is complete, close connection
+      console.log('Message stop received, final message:', this.currentMessage);
+      this.close();
+    }
+    else {
+      // Handle legacy format or other message types
+      if (data.message && this.messageCallback) {
+        this.messageCallback(data.message);
+        this.close(); // Close for non-streaming messages
+      }
+    }
+  }
+
   // Send message with chat history
-  sendMessage(message, chatHistory) {
+  sendMessage(message, messages) {
     return new Promise((resolve, reject) => {
       if (!this.isConnected) {
         reject(new Error('WebSocket is not connected'));
@@ -73,7 +101,7 @@ class WebSocketManager {
       const packet = {
         action: 'sendMessage', // Route name for API Gateway
         message: message,
-        chatHistory: chatHistory
+        messages: messages
       };
 
       try {
@@ -93,6 +121,8 @@ class WebSocketManager {
       this.ws.close();
       console.log('WebSocket connection closed manually');
     }
+    // Reset current message state
+    this.currentMessage = '';
   }
 
   // Get connection status
@@ -102,13 +132,13 @@ class WebSocketManager {
     return 'disconnected';
   }
 
-  // Complete send message workflow (connect -> send -> wait for response -> close)
-  async sendMessageAndWaitForResponse(message, chatHistory, onMessageReceived) {
+  // Complete send message workflow (connect -> send -> wait for response -> close on messageStop)
+  async sendMessageAndWaitForResponse(message, messages, onMessageReceived) {
     try {
       this.messageCallback = onMessageReceived;
       await this.connect();
-      await this.sendMessage(message, chatHistory);
-      // Connection will be closed automatically when response is received
+      await this.sendMessage(message, messages);
+      // Connection will be closed automatically when messageStop is received
       return true;
     } catch (error) {
       console.error('Error in sendMessageAndWaitForResponse:', error);
@@ -120,5 +150,4 @@ class WebSocketManager {
 
 // Create singleton instance
 const webSocketManager = new WebSocketManager();
-
 export default webSocketManager;

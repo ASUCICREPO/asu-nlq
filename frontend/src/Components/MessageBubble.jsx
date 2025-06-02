@@ -4,6 +4,7 @@ import { Person, SmartToy } from '@mui/icons-material';
 
 const MessageBubble = ({ message, sender }) => {
   const isUser = sender === 'user';
+  const isAssistant = sender === 'assistant';
 
   return (
     <Box
@@ -26,7 +27,6 @@ const MessageBubble = ({ message, sender }) => {
           <SmartToy fontSize="small" />
         </Avatar>
       )}
-      
       <Paper
         elevation={1}
         sx={{
@@ -36,14 +36,20 @@ const MessageBubble = ({ message, sender }) => {
           color: isUser ? 'primary.contrastText' : 'text.primary',
           borderRadius: 2,
           borderTopRightRadius: isUser ? 0.5 : 2,
-          borderTopLeftRadius: isUser ? 2 : 0.5
+          borderTopLeftRadius: isUser ? 2 : 0.5,
+          minHeight: isAssistant && !message ? '24px' : 'auto' // Show placeholder for empty streaming messages
         }}
       >
-        <Typography variant="body1" sx={{ wordWrap: 'break-word' }}>
-          {message}
+        <Typography 
+          variant="body1" 
+          sx={{ 
+            wordWrap: 'break-word',
+            whiteSpace: 'pre-wrap' // Preserve line breaks and whitespace
+          }}
+        >
+          {message || (isAssistant ? '...' : '')}
         </Typography>
       </Paper>
-      
       {isUser && (
         <Avatar
           sx={{

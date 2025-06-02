@@ -1,6 +1,8 @@
 import boto3
 import json
 import os
+from constants import nova_model_id
+from prompts import system_prompt
 
 # The Lambda main function handler
 def lambda_handler(event, context):
@@ -42,14 +44,24 @@ def orchestrate(event):
     # Extract the connection ID from the event
     connectionId = event["requestContext"]["connectionId"]
 
-    # Create a response message
-    response_message = {
-        "message": "Working test!"
-    }
+    # Extract the main parameters from the event
+    chatHistory = json.loads(event["body"])["messages"]
 
-    # Send the response message back to the client
-    send_to_gateway(connectionId, response_message)
+    config = {
+        "temperature": 0.7,
+    } 
+    
+    system = [
+        {
+            "text" : system_prompt
+        }
+    ]
 
+    # get a models response
+    response = converse_with_model_streaming(nova_model_id, chatHistory, config=config, system=system)
+
+    # Parse response and send to client
+    parse_and_send_response(response, connectionId)
 
     print("Orchestration completed")
     
@@ -74,14 +86,10 @@ def send_to_gateway(connectionId, json_data):
     return
 
 
-# Converse with model through streaming response TODO
-def converse_with_model_streaming(message, modelId, chatHistory=None, config=None, system=None):
+# Converse with model through streaming response
+def converse_with_model_streaming(modelId, chatHistory, config=None, system=None):
 
     bedrock = boto3.client('bedrock-runtime')
-
-
-
-
 
     response = bedrock.converse_stream(
         modelId=modelId,
@@ -91,3 +99,33 @@ def converse_with_model_streaming(message, modelId, chatHistory=None, config=Non
     )
 
     return response
+
+
+def parse_and_send_response(response, connectionId):
+    stream = response.get('stream')
+    if stream:
+        for event in stream:
+            if "contentBlockDelta" in event:
+                contentBlockDelta = event["contentBlockDelta"]
+                json_data = {
+                    "type": "contentBlockDelta",
+                    "data": contentBlockDelta
+                }
+                send_to_gateway(connectionId, json_data)
+            elif "messageStart" in event:
+                json_data = {
+                    "type": "messageStart",
+                    "data": event["messageStart"]
+                }
+                send_to_gateway(connectionId, json_data)
+            elif "messageStop" in event:
+                json_data = {
+                    "type": "messageStop",
+                    "data": event["messageStop"]
+                }
+                send_to_gateway(connectionId, json_data)
+            else:
+                # Handle other event types or ignore
+                print("Unhandled event type:", event)
+                
+
