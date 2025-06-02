@@ -43,7 +43,6 @@ class WebSocketManager {
         };
 
         this.ws.onmessage = (event) => {
-          console.log('WebSocket message received:', event.data);
           try {
             const data = JSON.parse(event.data);
             this.handleStreamingMessage(data);
