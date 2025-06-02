@@ -74,7 +74,7 @@ def send_to_gateway(connectionId, json_data):
     return
 
 
-# Converse with model through streaming response
+# Converse with model through streaming response TODO
 def converse_with_model_streaming(message, modelId, chatHistory=None, config=None, system=None):
 
     bedrock = boto3.client('bedrock-runtime')
