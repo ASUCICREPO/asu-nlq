@@ -3,6 +3,8 @@ from botocore.exceptions import ClientError
 import json
 import os
 import constants
+import sqlite3
+import pandas as pd
 
 
 def get_clients():
@@ -57,13 +59,18 @@ def converse_with_model(modelId, chatHistory, config=None, system=None, streamin
     return response
 
 
-def parse_and_send_response(response, connectionId, classic=None):
+def parse_and_send_response(response, connectionId, classic=None, pure=None):
     """Parse streaming response and send events to client in real-time"""
 
     if classic:
-        json_data = {
-            "message": response["output"]["message"]["content"][0]["text"],
-        }
+        if pure:
+            json_data = {
+                "message": response,
+            }
+        else:
+            json_data = {
+                "message": response["output"]["message"]["content"][0]["text"],
+            }
         send_to_gateway(connectionId, json_data)
         return
     
@@ -125,3 +132,35 @@ def create_history(chatHistory):
         history += f"{role}: {content}\n\n"
     
     return history
+
+
+def download_database_from_s3(bucket_name=None, file_key=None):
+    """Download database file from S3 and return local filepath"""
+
+    # Use default values from constants if not provided
+    bucket = bucket_name or os.environ["DATABASE_DESCRIPTIONS_S3_NAME"]
+    key = file_key or constants.DATABASE_NAME
+    
+    # Set local path in /tmp directory
+    local_path = f"/tmp/{constants.DATABASE_NAME}"
+    
+    # Download the database file from S3
+    s3_client.download_file(bucket, key, local_path)
+    return local_path
+
+
+def execute_sql_query(db_path, sql_statement):
+    """Execute SQL query on database and return results as DataFrame"""
+    
+    # Connect to the database
+    conn = sqlite3.connect(db_path)
+    
+    # Execute query and create DataFrame
+    df_result = pd.read_sql_query(sql_statement, conn)
+    
+    # Close the connection
+    conn.close()
+    
+    return df_result.to_string()
+        
+   
