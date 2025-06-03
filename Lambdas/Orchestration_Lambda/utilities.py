@@ -57,8 +57,15 @@ def converse_with_model(modelId, chatHistory, config=None, system=None, streamin
     return response
 
 
-def parse_and_send_response(response, connectionId):
+def parse_and_send_response(response, connectionId, classic=None):
     """Parse streaming response and send events to client in real-time"""
+
+    if classic:
+        json_data = {
+            "message": response["output"]["message"]["content"][0]["text"],
+        }
+        send_to_gateway(connectionId, json_data)
+        return
     
     stream = response.get('stream')
     if stream:
@@ -106,3 +113,15 @@ def download_s3_json(bucket_name=None, file_key=None):
     # Read file content and parse as JSON
     file_content = response['Body'].read()
     return json.loads(file_content)
+
+
+def create_history(chatHistory):
+    """Create a formatted conversation history for AI model input"""
+    
+    history = ""
+    for message in chatHistory:
+        role = message["role"]
+        content = message["content"][0]["text"]
+        history += f"{role}: {content}\n\n"
+    
+    return history
