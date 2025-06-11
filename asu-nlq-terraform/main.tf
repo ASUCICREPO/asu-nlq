@@ -9,13 +9,6 @@ resource "random_id" "random_suffix" {
   byte_length = 4
 }
 
-# module "frontend" {
-#   source     = "./modules/frontend"
-#   aws_region = var.aws_region
-#   websocket_api_endpoint = "${module.backend.websocket_api_endpoint}"
-
-# }
-
 
 module "backend" {
   source            = "./modules/backend"
@@ -26,21 +19,21 @@ module "backend" {
 
 }
 
-# Prepare the frontend files for deployment
-resource "null_resource" "prepare_orchestration_lambda_files" {
-  provisioner "local-exec" {
-    command = ""
-  }
+module "scripts" {
+  source = "./modules/scripts"
+  aws_region = var.aws_region
+  websocket_api_endpoint = module.backend.websocket_api_endpoint
 
   depends_on = [ module.backend ]
 }
 
+
+
 module "frontend" {
   source     = "./modules/frontend"
   aws_region = var.aws_region
-  websocket_api_endpoint = "${module.backend.websocket_api_endpoint}"
 
-  depends_on = [ null_resource.prepare_orchestration_lambda_files, module.backend]
+  depends_on = [ module.scripts ]
 
 }
 
