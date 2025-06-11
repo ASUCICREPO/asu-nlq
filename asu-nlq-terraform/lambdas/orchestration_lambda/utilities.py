@@ -1,7 +1,6 @@
 import boto3
 from botocore.exceptions import ClientError
 import json
-import os
 import constants
 import sqlite3
 import pandas as pd
@@ -10,11 +9,8 @@ import pandas as pd
 def get_clients():
     """Initialize and return all AWS service clients"""
     
-    # Validate API Gateway URL from environment
-    if os.environ.get("API_GATEWAY_URL") is None:
-        raise ValueError("API Gateway URL not set in environment variables")
-    
-    apiGatewayURL = os.environ["API_GATEWAY_URL"]
+    apiGatewayURL = "https" + constants.API_GATEWAY_URL[3:] + "/prod"  # Ensure URL starts with https and ends with /prod
+    print("API Gateway URL:", apiGatewayURL)
     
     # Initialize AWS service clients
     gateway = boto3.client("apigatewaymanagementapi", endpoint_url=apiGatewayURL)
@@ -111,8 +107,8 @@ def download_s3_json(bucket_name=None, file_key=None):
     """Download and parse JSON file from S3 bucket"""
     
     # Use default values from constants if not provided
-    bucket = bucket_name or os.environ["DATABASE_DESCRIPTIONS_S3_NAME"]
-    key = file_key or constants.DATABASE_SCHEMA_TEMPLATE_FILENAME
+    bucket = bucket_name or constants.DATABASE_DESCRIPTIONS_S3_NAME
+    key = file_key or (constants.TEMPLATE_NAME + ".json")
     
     # Download the JSON file from S3
     response = s3_client.get_object(Bucket=bucket, Key=key)
@@ -138,8 +134,8 @@ def download_database_from_s3(bucket_name=None, file_key=None):
     """Download database file from S3 and return local filepath"""
 
     # Use default values from constants if not provided
-    bucket = bucket_name or os.environ["DATABASE_DESCRIPTIONS_S3_NAME"]
-    key = file_key or constants.DATABASE_NAME
+    bucket = bucket_name or constants.DATABASE_DESCRIPTIONS_S3_NAME
+    key = file_key or (constants.DATABASE_NAME + ".db")
     
     # Set local path in /tmp directory
     local_path = f"/tmp/{constants.DATABASE_NAME}"

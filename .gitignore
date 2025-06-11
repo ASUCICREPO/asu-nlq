@@ -1,0 +1,9 @@
+# Ignore Terraform files
+/asu-nlq-terraform/.terraform
+/asu-nlq-terraform/.terraform.lock.hcl
+/asu-nlq-terraform/terraform.tfstate
+/asu-nlq-terraform/terraform.tfstate.backup
+/asu-nlq-terraform/.terraform.tfstate.lock.info
+/asu-nlq-terraform/lambdas/zips/*
+/asu-nlq-terraform/frontend/node_modules
+asu-nlq-terraform/S3/*
