@@ -9,7 +9,7 @@ resource "random_id" "random_suffix" {
   byte_length = 4
 }
 
-
+# Creates the backend of the app
 module "backend" {
   source            = "./modules/backend"
   aws_region        = var.aws_region
@@ -19,6 +19,7 @@ module "backend" {
 
 }
 
+# zips the frontend files
 module "scripts" {
   source = "./modules/scripts"
   aws_region = var.aws_region
@@ -27,11 +28,11 @@ module "scripts" {
   depends_on = [ module.backend ]
 }
 
-
-
+# Creates the frontend of the app
 module "frontend" {
   source     = "./modules/frontend"
   aws_region = var.aws_region
+  random_suffix = random_id.random_suffix.hex
 
   depends_on = [ module.scripts ]
 

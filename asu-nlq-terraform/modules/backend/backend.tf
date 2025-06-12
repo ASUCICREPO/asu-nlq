@@ -13,7 +13,7 @@ data "archive_file" "orchestration_lambda_zip" {
 # This section defines the S3 bucket for storing database descriptions and database files
 ####################################################################################################
 
-#Defines the S3 bucket for storing database descriptions and schemas
+# Defines the S3 bucket for storing database descriptions and schemas
 resource "aws_s3_bucket" "asu_nlq_chatbot_database_descriptions_bucket" {
   bucket = "asu-nlq-chatbot-database-descriptions-${var.random_suffix}"
   force_destroy = true
