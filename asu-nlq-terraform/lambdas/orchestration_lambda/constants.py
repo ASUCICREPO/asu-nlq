@@ -1,11 +1,36 @@
 import os
+import logging
+
 """
 Constants for NLQ project
 This module contains configuration constants used throughout the application
 """
-# Database Schema Configuration
-# Template file containing the JSON schema definition for the database
 
+# ============================================================================
+# LOGGING CONFIGURATION
+# ============================================================================
+
+# Logging configuration - change LOG_LEVEL to control all modules
+LOG_LEVEL = logging.WARNING  # or logging.DEBUG, logging.WARNING, etc.
+LOG_FORMAT = '%(asctime)s - %(levelname)s - %(name)s - %(message)s'
+
+def setup_logging():
+    """Configure logging for the entire application"""
+    logging.basicConfig(
+        level=LOG_LEVEL,
+        format=LOG_FORMAT,
+        force=True  # Override any existing configuration
+    )
+
+# Call setup when constants is imported
+setup_logging()
+
+
+# ============================================================================
+# DATABASE SCHEMA CONFIGURATION
+# ============================================================================
+
+# Template file containing the JSON schema definition for the database
 DATABASE_NAME = os.environ.get("DATABASE_NAME")
 if not DATABASE_NAME:
     raise ValueError("DATABASE_NAME environment variable is required")

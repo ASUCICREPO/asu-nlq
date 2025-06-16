@@ -1,222 +1,311 @@
 import json
+import logging
+import traceback
 from chatbot_config import get_prompt, get_config, get_id
 from utilities import converse_with_model, parse_and_send_response, download_s3_json, create_history, download_database_from_s3, execute_sql_query
 
+import constants  # This configures logging
+
+logger = logging.getLogger(__name__)
+
 def orchestrate(event):
-    """Main orchestration logic for processing chat requests"""
-    print("Starting orchestration with event:", event)
+    """
+    Main orchestration function for processing chat requests via WebSocket.
     
-    # Extract WebSocket connection ID for response routing
-    connectionId = event["requestContext"]["connectionId"]
+    Extracts connection info, parses messages, classifies queries, and routes
+    to appropriate handlers (SQL, NoSQL, or dangerous query blocking).
+    """
+    logger.info("Starting orchestration")
+    
+    # Extract WebSocket connection ID
+    try:
+        connectionId = event["requestContext"]["connectionId"]
+        logger.info(f"Processing connection: {connectionId}")
+    except KeyError:
+        logger.error("Failed to extract connection ID")
+        return None
     
     try:
-        # Parse chat history from the WebSocket message body
+        # Parse chat history
         chatHistory = json.loads(event["body"])["messages"]
+        logger.info(f"Parsed {len(chatHistory)} messages")
         
         # Get database schema from S3
         schema = download_s3_json()
+        logger.info("Downloaded schema from S3")
         
-        # Classify the user's query using a classification model, and respond to it
-        classification = json.loads(classify_query(chatHistory[-1], chatHistory, schema)["output"]["message"]["content"][0]["text"])
+        # Classify the user's query
+        classification_response = classify_query(chatHistory[-1], chatHistory, schema)
+        classification = json.loads(classification_response["output"]["message"]["content"][0]["text"])
+        logger.info(f"Query classified as: {classification['classification']}")
         
-        # Check the classification type and respond accordingly
-        if (classification["classification"] == "SQL_Query"):
-
-            # Respond to the SQL query classification and send it to the client #TODO implement this
+        # Route to appropriate handler
+        if classification["classification"] == "SQL_Query":
             response = respond_to_sql_query(chatHistory=chatHistory, schema=schema, reasoning=classification)
             parse_and_send_response(response, connectionId)
+            logger.info("SQL query processed successfully")
 
-        elif (classification["classification"] == "NoSQL_Query"):
-
-            # Respond to the NoSQL query classification and send it to the client
+        elif classification["classification"] == "NoSQL_Query":
             response = respond_to_nosql_query(chatHistory, schema, classification)
             parse_and_send_response(response, connectionId)
+            logger.info("NoSQL query processed successfully")
 
-        elif (classification["classification"] == "Dangerous"): #TODO add retriver for basic responses, error, dangerous etc
-
-            # Respond to the dangerous query
-            parse_and_send_response("I'm sorry, I cannot answer that question. Please make a new chat.", connectionId, classic=True, pure=True)
+        elif classification["classification"] == "Dangerous":
+            logger.warning("Dangerous query blocked")
+            parse_and_send_response("I'm sorry, I cannot answer that question. Please make a new chat.", 
+                                  connectionId, classic=True, pure=True)
 
         else:
-            # Send error message for unknown classification
-            raise ValueError("Unknown classification type: {}".format(classification["classification"]))  
+            logger.error(f"Unknown classification: {classification['classification']}")
+            raise ValueError(f"Unknown classification type: {classification['classification']}")
               
     except Exception as e:
-        # Handle any unexpected errors
-        error_msg = f"Unexpected error in orchestrate: {str(e)}"
-        print(f"General error: {error_msg}")
-        parse_and_send_response("An unexpected error occurred. Please try again later.", connectionId, classic=True, pure=True) #TODO add retriver for basic responses, error, dangerous etc
+        logger.error(f"Orchestration failed: {str(e)}")
+        logger.debug(f"Full traceback: {traceback.format_exc()}")
+        
+        if connectionId:
+            parse_and_send_response("An unexpected error occurred. Please try again later.", 
+                                  connectionId, classic=True, pure=True)
     
-    print("Orchestration completed")
-    return 
+    logger.info("Orchestration completed")
+    return None
 
 
-
-    # # download database from S3
-    # database_path = download_database_from_s3()
-
-    # query = "SELECT Term, SUM(Students) as TotalStudents FROM asu_facts WHERE Undergraduate_or_Graduate = 'Undergraduate' AND College = 'Engineering' AND Term IN ('Fall 2021', 'Fall 2022') GROUP BY Term ORDER BY Term ASC;"
-
-    # results = execute_sql_query(database_path, query)
-
-    # print("Results:", results)
-
-
-
-
-# Classify the user's query using a classification prompted model
 def classify_query(message, chatHistory, schema):
-    """Classify the user's query using a classification prompted model - outputs json document"""
+    """
+    Classify the user's query using AI to determine response strategy.
+    Returns classification with reasoning for routing decisions.
+    """
+    logger.info("Classifying user query")
+    
+    try:
+        history = create_history(chatHistory)
+        schema_json = json.dumps(schema, indent=4)
 
-    history = create_history(chatHistory)
+        response = converse_with_model(
+            get_id("classify"),
+            [message],
+            config=get_config("classify"),
+            system=get_prompt("classify", message=message["content"][0]["text"], chatHistory=history, schema=schema_json),
+            streaming=False
+        )
+        
+        logger.info("Query classification completed")
+        return response
+        
+    except Exception as e:
+        logger.error(f"Classification failed: {e}")
+        raise
 
-    schema=json.dumps(schema, indent=4)
 
-    # Get AI model response
-    response = converse_with_model(
-        get_id("classify"),
-        [message],
-        config=get_config("classify"),
-        system=get_prompt("classify", message=message["content"][0]["text"], chatHistory=history, schema=schema),
-        streaming=False
-    )
+def respond_to_nosql_query(chatHistory, schema, reasoning):
+    """
+    Handle NoSQL database queries with streaming responses.
+    Processes non-relational database operations and document queries.
+    """
+    logger.info("Processing NoSQL query")
+    
+    try:
+        schema_json = json.dumps(schema, indent=4)
+        query_reasoning = reasoning.get("reasoning", "")
 
-    return response
+        response = converse_with_model(
+            get_id("no_sql"), 
+            chatHistory, 
+            config=get_config("no_sql"), 
+            system=get_prompt("no_sql", chatHistory=chatHistory, schema=schema_json, reasoning=query_reasoning),
+            streaming=True
+        )
+        
+        logger.info("NoSQL query completed")
+        return response
+        
+    except Exception as e:
+        logger.error(f"NoSQL query failed: {e}")
+        raise
 
-# Respond to a NoSQL query classification
-def respond_to_nosql_query(chatHistory, scheme, reasoning):
-    """Respond to a NoSQL query classification"""
 
-    schema=json.dumps(scheme, indent=4)
-
-    reasoning=reasoning["reasoning"]
-
-    response = converse_with_model(
-        get_id("no_sql"), 
-        chatHistory, 
-        config=get_config("no_sql"), 
-        system=get_prompt("no_sql", chatHistory=chatHistory, schema=schema, reasoning=reasoning),
-        streaming=True
-    )
-
-    return response
-
-# Respond to a SQL query classification #TODO implement this
 def respond_to_sql_query(chatHistory, schema, reasoning):
-    """Respond to a SQL query classification"""
+    """
+    Handle SQL queries through multi-stage pipeline:
+    1. Create specific question
+    2. Extract relevant attributes  
+    3. Generate SQL queries
+    4. Execute queries on database
+    5. Generate natural language response
+    """
+    logger.info("Starting SQL query pipeline")
+    
+    try:
+        # Stage 1: Create specific question
+        logger.info("Creating specific question")
+        response = create_question(message=chatHistory[-1], chatHistory=chatHistory, schema=schema, reasoning=reasoning)
+        specific_question = json.loads(response["output"]["message"]["content"][0]["text"])
 
-    # Create a very specific question to generate SQL on
-    response = create_question(message=chatHistory[-1], chatHistory=chatHistory, schema=schema, reasoning=reasoning)
+        # Stage 2: Extract relevant attributes
+        logger.info("Extracting database attributes")
+        attribute_response = get_attributes_json(message=specific_question["improved_question"], schema=schema)
+        attribute_json = json.loads(attribute_response["output"]["message"]["content"][0]["text"])
 
-    # Parse the response to get the specific question
-    specific_question = json.loads(response["output"]["message"]["content"][0]["text"])
+        # Stage 3: Generate SQL queries
+        logger.info("Generating SQL queries")
+        queries_response = get_sql_queries(
+            message=specific_question["improved_question"], 
+            schema=schema, 
+            attributes=json.dumps(attribute_json, indent=4)
+        )
+        queries = json.loads(queries_response["output"]["message"]["content"][0]["text"])
 
-    # Get attributes JSON with the database schema
-    attribute_json = json.loads(get_attributes_json(message=specific_question["improved_question"], schema=schema)["output"]["message"]["content"][0]["text"])
+        # Stage 4: Execute queries
+        logger.info("Executing SQL queries")
+        database_path = download_database_from_s3()
+        
+        results = ""
+        for query in queries["queries"]:
+            try:
+                query_result = execute_sql_query(database_path, query)
+                results += f"{query}\n{query_result}\n\n"
+            except Exception as e:
+                logger.error(f"Query execution failed: {e}")
+                results += f"{query}\nError: {str(e)}\n\n"
 
-    # Get SQL queries based on the attributes JSON and specific question and the schema
-    queries = json.loads(get_sql_queries(message=specific_question["improved_question"], schema=schema, attributes=json.dumps(attribute_json, indent=4))["output"]["message"]["content"][0]["text"])
+        # Stage 5: Generate final response
+        logger.info("Generating final response")
+        final_response = get_final_response(
+            chatHistory=chatHistory, 
+            schema=schema, 
+            specific_question=specific_question["improved_question"], 
+            results=results
+        )
+        
+        logger.info("SQL pipeline completed")
+        return final_response
+        
+    except Exception as e:
+        logger.error(f"SQL pipeline failed: {e}")
+        logger.debug(f"Traceback: {traceback.format_exc()}")
+        raise
 
-    # Download the database from S3
-    database_path = download_database_from_s3()
 
-    # Execute the SQL queries and get the results
-    results = ""
-    for query in queries["queries"]:
-        results += query + "\n" + execute_sql_query(database_path, query) + "\n\n"
-
-    # create the final response
-    final_response = get_final_response(chatHistory=chatHistory, schema=schema, specific_question=specific_question["improved_question"], results=results)
-
-
-    return final_response
-
-# Create a very specific question to generate SQL on
 def create_question(message, chatHistory, schema, reasoning):
-    """Create a very specific question to generate SQL on"""
+    """
+    Transform user input into a specific, actionable database question.
+    Uses conversation context and schema to refine vague queries.
+    """
+    logger.info("Creating specific question")
+    
+    try:
+        formatted_history = create_history(chatHistory)
+        schema_json = json.dumps(schema, indent=4)
+        query_reasoning = reasoning.get("reasoning", "")
 
-    chatHistory=create_history(chatHistory)
+        response = converse_with_model(
+            get_id("create_question"),
+            [message],
+            config=get_config("create_question"),
+            system=get_prompt(
+                "create_question", 
+                message=message["content"][0]["text"], 
+                chatHistory=formatted_history, 
+                schema=schema_json, 
+                reasoning=query_reasoning
+            ),
+            streaming=False
+        )
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"Question creation failed: {e}")
+        raise
 
-    schema = json.dumps(schema, indent=4)
 
-    reasoning = reasoning["reasoning"]
-
-    response = converse_with_model(
-        get_id("create_question"),
-        [message],
-        config=get_config("create_question"),
-        system=get_prompt("create_question", message=message["content"][0]["text"], chatHistory=chatHistory, schema=schema, reasoning=reasoning),
-        streaming=False
-    )
-
-    return response
-
-# Get attributes JSON for the database schema
 def get_attributes_json(message, schema):
-    """Get attributes JSON for the database schema"""
+    """
+    Extract relevant database attributes for the given query.
+    Identifies which tables and columns are needed for the question.
+    """
+    logger.info("Extracting relevant attributes")
+    
+    try:
+        schema_json = json.dumps(schema, indent=4)
 
-    schema=json.dumps(schema, indent=4)
-
-    message_formatted = {
+        message_formatted = {
             "role": "user",
             "content": [{
                 "text": message,
             }]
         }
-    
-    response = converse_with_model(
-        get_id("attributes_json"),
-        [message_formatted],
-        config=get_config("attributes_json"),
-        system=get_prompt("attributes_json", message=message, schema=schema),
-        streaming=False
-    )
+        
+        response = converse_with_model(
+            get_id("attributes_json"),
+            [message_formatted],
+            config=get_config("attributes_json"),
+            system=get_prompt("attributes_json", message=message, schema=schema_json),
+            streaming=False
+        )
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"Attribute extraction failed: {e}")
+        raise
 
-    
-    return response
 
-# Get SQL queries based on the attributes JSON and specific question and the schema
 def get_sql_queries(message, schema, attributes):
-    """Get SQL queries based on the attributes JSON and specific question and the schema"""
+    """
+    Generate optimized SQL queries based on the question and relevant attributes.
+    Creates efficient queries using identified schema elements.
+    """
+    logger.info("Generating SQL queries")
+    
+    try:
+        schema_json = json.dumps(schema, indent=4)
 
-    # Format the schema and attributes for the model
-    schema = json.dumps(schema, indent=4)
-
-    # Format the message for the model
-    message_formatted = {
+        message_formatted = {
             "role": "user",
             "content": [{
                 "text": message,
             }]
         }
 
-    response = converse_with_model(
-        get_id("sql_generation"),
-        [message_formatted],
-        config=get_config("sql_generation"),
-        system=get_prompt("sql_generation", message=message, schema=schema, attributes=attributes),
-        streaming=False
-    )
-    print("SQL queries:", response)
-    
+        response = converse_with_model(
+            get_id("sql_generation"),
+            [message_formatted],
+            config=get_config("sql_generation"),
+            system=get_prompt("sql_generation", message=message, schema=schema_json, attributes=attributes),
+            streaming=False
+        )
+        
+        logger.info("SQL generation completed")
+        return response
+        
+    except Exception as e:
+        logger.error(f"SQL generation failed: {e}")
+        raise
 
-    return response
 
-# Get the final response based on the chat history, schema, specific question and results
 def get_final_response(chatHistory, schema, specific_question, results):
-    """Get the final response based on the chat history, schema, specific question and results"""
+    """
+    Convert SQL query results into natural language response.
+    Synthesizes data into conversational format that answers the user's question.
+    """
+    logger.info("Generating final response")
+    
+    try:
+        schema_json = json.dumps(schema, indent=4)
 
-    schema = json.dumps(schema, indent=4)
-
-    response = converse_with_model(
-        get_id("final_response"),
-        chatHistory,
-        config=get_config("final_response"),
-        system=get_prompt("final_response", message=specific_question, schema=schema, results=results),
-        streaming=True
-    )
-
-    return response
-
-
-   
+        response = converse_with_model(
+            get_id("final_response"),
+            chatHistory,
+            config=get_config("final_response"),
+            system=get_prompt("final_response", message=specific_question, schema=schema_json, results=results),
+            streaming=True
+        )
+        
+        logger.info("Final response generated")
+        return response
+        
+    except Exception as e:
+        logger.error(f"Final response generation failed: {e}")
+        raise
