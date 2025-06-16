@@ -90,7 +90,7 @@
       "possible_values": ["First-Time Freshman", "New Non-Degree Seeking", "New Transfer"]
     },
     {
-      "column_name": "FT_PT",
+      "column_name": "FT-PT",
       "data_type": "VARCHAR(50)",
       "description": "A string value indicates whether students are Full-Time or Part-Time.",
       "possible_values": ["Full-Time", "Part-Time"]
