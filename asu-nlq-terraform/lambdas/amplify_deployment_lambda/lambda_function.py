@@ -1,8 +1,11 @@
 import json
 import urllib3
+import boto3
+import os
 
 http = urllib3.PoolManager()
 SUCCESS = "SUCCESS"
+amplify = boto3.client('amplify')
 
 def lambda_handler(event, context):
     """
@@ -19,18 +22,108 @@ def lambda_handler(event, context):
         
         if request_type == "Create":
             print("Handling Create request")
-            # Add any Create-specific logic here if needed in the future
-            send(event, context, SUCCESS, {"Message": "Create operation completed successfully"})
+
+            appId = None
+            branchName = None
 
             # Create amplify app with amplify.create_app() - name given in env
 
-            # Create an amplify deployment with amplify.create_deployment()
+            if 'AMPLIFY_APP_NAME' not in os.environ:
+                send(event, context, SUCCESS, {"Message": "Environment variable 'AMPLIFY_APP_NAME' is not set."})
+                print("Environment variable 'AMPLIFY_APP_NAME' is not set.")
+                return
+            
+            try:
+                create_amplify_app_response = amplify.create_app(
+                    name=os.environ['AMPLIFY_APP_NAME'],
+                    description='ASU NLQ Chatbot Amplify App',
+                    platform='WEB',
+                    enableBranchAutoBuild=False,
+                    enableBranchAutoDeletion=False,
+                    enableBasicAuth=False,
+                    customRules=[
+                        {
+                            "source": "/<*>",
+                            "target": "/index.html",
+                            "status": "404-200"
+                        }
+                    ],
+                    enableAutoBranchCreation=False,
+                    customHeaders=""
+                )
 
-            # Download the zip file from the S3 bucket
+                if create_amplify_app_response["app"]["appId"]:
+                    appId = create_amplify_app_response["app"]["appId"]
+                    print(f"Amplify app created successfully with ID: {create_amplify_app_response['app']['appId']}")
+                else:
+                    print("Amplify app creation failed, no appId returned.")
+                    send(event, context, SUCCESS, {"Message": "Amplify app creation failed, no appId returned."})
+                    return
+                    
+            except Exception as e:
+                print(f"Error creating amplify app: {str(e)}")
+                send(event, context, SUCCESS, {"Error": str(e)})
+                pass  # Continue execution even if there's an error
 
-            # Put zip file into deployment URL
+            # Create an amplify branch with amplify.create_branch()
+
+            if not appId:
+                    print("No appId available, cannot create branch.")
+                    send(event, context, SUCCESS, {"Message": "No appId available, cannot create branch."})
+                    return
+
+            try:
+                
+                response_create_branch = amplify.create_branch(
+                    appId=appId,
+                    branchName='prod',
+                    description='Production branch for ASU NLQ Chatbot',
+                    stage='PRODUCTION',
+                    enableNotification=False,
+                    enableAutoBuild=True,
+                    enableBasicAuth=False,
+                    enablePerformanceMode=False,
+                    ttl="5",
+                    enablePullRequestPreview=False,
+                    backend={},
+                )
+
+                if response_create_branch["branch"]["branchName"]:
+                    branchName = response_create_branch["branch"]["branchName"]
+                    print(f"Amplify branch created successfully with name: {response_create_branch['branch']['branchName']}")
+                else:
+                    print("Amplify branch creation failed, no branchName returned.")
+                    send(event, context, SUCCESS, {"Message": "Amplify branch creation failed, no branchName returned."})
+                    return
+                
+            except Exception as e:
+                print(f"Error creating amplify branch: {str(e)}")
+                send(event, context, SUCCESS, {"Error": str(e)})
+                pass
+
+            if not branchName:
+                    print("No branchName available, cannot create deployment.")
+                    send(event, context, SUCCESS, {"Message": "No branchName available, cannot create deployment."})
+                    return
 
             # Start the deployment with amplify.start_deployment()
+
+            try:
+                print(f"S3 bucket URL: s3://{os.environ['FRONTEND_BUCKET_NAME']}/{os.environ['FRONTEND_ZIP_NAME']}/")
+                response_start_deployment = amplify.start_deployment(
+                    appId=appId,
+                    branchName=branchName,
+                    sourceUrl="s3://" + os.environ['FRONTEND_BUCKET_NAME'] + "/" + os.environ['FRONTEND_ZIP_NAME'] + "/",
+                    sourceUrlType="BUCKET_PREFIX"
+                )
+                
+            except Exception as e:
+                print(f"Error starting deployment: {str(e)}")
+                send(event, context, SUCCESS, {"Error": str(e)})
+                pass
+
+            send(event, context, SUCCESS, {"Message": "Create operation completed successfully"})
+
             
         elif request_type == "Update":
             print("Handling Update request")
