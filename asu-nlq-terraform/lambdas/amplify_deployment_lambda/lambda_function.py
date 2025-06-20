@@ -2,6 +2,8 @@ import json
 import urllib3
 import boto3
 import os
+import zipfile
+import tempfile
 
 http = urllib3.PoolManager()
 SUCCESS = "SUCCESS"
@@ -26,13 +28,28 @@ def lambda_handler(event, context):
             appId = None
             branchName = None
 
-            # Create amplify app with amplify.create_app() - name given in env
+            
 
             if 'AMPLIFY_APP_NAME' not in os.environ:
                 send(event, context, SUCCESS, {"Message": "Environment variable 'AMPLIFY_APP_NAME' is not set."})
                 print("Environment variable 'AMPLIFY_APP_NAME' is not set.")
                 return
             
+            # Unzip S3 bucket zip files
+            try:
+
+                response = extract_s3_zip(os.environ['FRONTEND_BUCKET_NAME'], "build.zip")
+                if response['success']: 
+                    print(f"Successfully extracted and uploaded {len(response['uploaded_files'])} files from {response['base_folder']}")     
+                
+            except:
+                print("Error extracting zip file from S3 bucket.")
+                send(event, context, SUCCESS, {"Message": "Error extracting zip file from S3 bucket."})
+                pass
+
+
+
+            # Create amplify app with amplify.create_app() - name given in env
             try:
                 create_amplify_app_response = amplify.create_app(
                     name=os.environ['AMPLIFY_APP_NAME'],
@@ -109,11 +126,11 @@ def lambda_handler(event, context):
             # Start the deployment with amplify.start_deployment()
 
             try:
-                print(f"S3 bucket URL: s3://{os.environ['FRONTEND_BUCKET_NAME']}/{os.environ['FRONTEND_ZIP_NAME']}/")
+                print(f"S3 bucket URL: s3://{os.environ['FRONTEND_BUCKET_NAME']}{os.environ['FRONTEND_FOLDER_NAME']}")
                 response_start_deployment = amplify.start_deployment(
                     appId=appId,
                     branchName=branchName,
-                    sourceUrl="s3://" + os.environ['FRONTEND_BUCKET_NAME'] + "/" + os.environ['FRONTEND_ZIP_NAME'] + "/",
+                    sourceUrl="s3://" + os.environ['FRONTEND_BUCKET_NAME'] + os.environ['FRONTEND_FOLDER_NAME'],
                     sourceUrlType="BUCKET_PREFIX"
                 )
                 
@@ -185,3 +202,59 @@ def send(event, context, responseStatus, responseData, physicalResourceId=None, 
     
     response = http.request('PUT', responseUrl, headers=headers, body=json_responseBody)
     print(f"CloudFormation response status code: {response.status}")
+
+
+# Extracts a zip file from S3, uploads its contents back to S3
+def extract_s3_zip(bucket_name, zip_key):
+    # Function to extract a zip file from S3 and upload its contents back to S3
+
+    s3_client = boto3.client('s3')
+    
+    try:
+        # Create temporary directory for processing
+        with tempfile.TemporaryDirectory() as temp_dir:
+            
+            # Download the zip file from S3
+            zip_file_path = os.path.join(temp_dir, 'downloaded.zip')
+            print(f"Downloading {zip_key} from bucket {bucket_name}")
+            s3_client.download_file(bucket_name, zip_key, zip_file_path)
+            
+            # Extract the zip file
+            extract_dir = os.path.join(temp_dir, 'extracted')
+            os.makedirs(extract_dir, exist_ok=True)
+            
+            with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
+                zip_ref.extractall(extract_dir)
+                print(f"Extracted {len(zip_ref.namelist())} files")
+            
+            # Determine the base folder name from the zip key
+            base_folder = os.path.splitext(os.path.basename(zip_key))[0]
+            
+            # Upload extracted files to S3
+            uploaded_files = []
+            for root, dirs, files in os.walk(extract_dir):
+                for file in files:
+                    local_file_path = os.path.join(root, file)
+                    
+                    # Calculate relative path from extraction directory
+                    relative_path = os.path.relpath(local_file_path, extract_dir)
+                    
+                    # Create S3 key: base_folder + relative path
+                    s3_key = f"{base_folder}/{relative_path}".replace(os.sep, '/')
+                    
+                    # Upload file to S3
+                    print(f"Uploading {relative_path} to {s3_key}")
+                    s3_client.upload_file(local_file_path, bucket_name, s3_key)
+                    uploaded_files.append(s3_key)
+            
+            return {
+                'success': True,
+                'message': f"Successfully extracted and uploaded {len(uploaded_files)} files",
+                'uploaded_files': uploaded_files,
+                'base_folder': base_folder
+            }
+    
+    except Exception as e:
+        error_msg = f"Error extracting zip file: {str(e)}"
+        print(error_msg)
+        raise Exception(error_msg)

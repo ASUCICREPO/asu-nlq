@@ -150,7 +150,7 @@ resource "aws_lambda_function" "asu_nlq_amplify_deployment_lambda" {
   environment {
     variables = {
       FRONTEND_BUCKET_NAME    = aws_s3_bucket.asu_nlq_frontend_store_bucket.id
-      FRONTEND_ZIP_NAME       = "build.zip"
+      FRONTEND_FOLDER_NAME       = "/build/"
       AMPLIFY_APP_NAME        = "ASU_NLQ_Chatbot_App-${var.random_suffix}"
     }
   }
