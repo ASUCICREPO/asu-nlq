@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
 import { Box, Paper } from '@mui/material';
-import MessageList from './MessageList';
+import ChatHeader from './ChatHeader';
+import WelcomeScreen from './WelcomeScreen';
+import ActiveChatView from './ActiveChatView';
 import MessageInput from './MessageInput';
-import ConnectionStatus from './ConnectionStatus';
 import webSocketManager from '../Utilities/websocketManager';
-import { DEBUG } from '../Utilities/constants';
 
 const ChatContainer = () => {
   const [messages, setMessages] = useState([]);
-  const [connectionStatus, setConnectionStatus] = useState('disconnected');
   const [isStreaming, setIsStreaming] = useState(false);
+  
+  // Determine if we should show welcome screen or active chat
+  const showWelcomeScreen = messages.length === 0;
 
   const handleSendMessage = async (message) => {
     // Add user message to messages array
@@ -21,14 +23,11 @@ const ChatContainer = () => {
         }
       ]
     };
-
     const newMessages = [...messages, userMessage];
     setMessages(newMessages);
 
     try {
-      setConnectionStatus('connecting');
       setIsStreaming(true);
-
       // Add placeholder for assistant message that will be updated as it streams
       const assistantMessage = {
         role: "assistant",
@@ -38,7 +37,6 @@ const ChatContainer = () => {
           }
         ]
       };
-      
       const messagesWithPlaceholder = [...newMessages, assistantMessage];
       setMessages(messagesWithPlaceholder);
 
@@ -51,9 +49,8 @@ const ChatContainer = () => {
             console.warn('No messages found when trying to update assistant response');
             return prevMessages;
           }
-          
+
           const lastMessage = prevMessages[prevMessages.length - 1];
-          
           // If last message isn't from assistant, we might need to add one
           if (lastMessage?.role !== 'assistant') {
             console.log('Last message is not assistant, adding new assistant message');
@@ -67,7 +64,7 @@ const ChatContainer = () => {
             };
             return [...prevMessages, newAssistantMessage];
           }
-          
+
           // Update existing assistant message
           const newMessages = prevMessages.slice(0, -1); // All messages except last
           const updatedLastMessage = {
@@ -78,7 +75,6 @@ const ChatContainer = () => {
               }
             ]
           };
-          
           return [...newMessages, updatedLastMessage];
         });
       };
@@ -88,22 +84,17 @@ const ChatContainer = () => {
         newMessages,
         onBotMessageReceived
       );
-
-      setConnectionStatus('connected');
     } catch (error) {
       console.error('Failed to send message:', error);
-      setConnectionStatus('disconnected');
-      
       // Remove the placeholder message on error
       setMessages(prevMessages => {
         const filteredMessages = [...prevMessages];
-        if (filteredMessages[filteredMessages.length - 1]?.role === 'assistant' && 
+        if (filteredMessages[filteredMessages.length - 1]?.role === 'assistant' &&
             filteredMessages[filteredMessages.length - 1]?.content[0]?.text === '') {
           filteredMessages.pop();
         }
         return filteredMessages;
       });
-      
       // TODO: Add error handling UI feedback
     } finally {
       setIsStreaming(false);
@@ -115,26 +106,91 @@ const ChatContainer = () => {
       sx={{
         height: '100vh',
         display: 'flex',
-        flexDirection: 'column',
+        flexDirection: 'column', // Changed to column for new layout
         width: '100vw'
       }}
     >
-      <Paper
-        elevation={0}
+      {/* ChatHeader - 9% Padding */}
+      <Box
+        sx={{
+          width: '100%',
+          flexShrink: 0,
+          paddingX: '7%' // Fixed 9% padding on both sides
+        }}
+      >
+        <ChatHeader />
+      </Box>
+      
+      {/* Main Content Area with Buffers */}
+      <Box
         sx={{
           flex: 1,
           display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-          borderRadius: 0
+          flexDirection: 'row',
+          overflow: 'hidden'
         }}
       >
-        {DEBUG && (
-          <ConnectionStatus status={connectionStatus} />
-        )}
-        <MessageList messages={messages} />
-        <MessageInput onSendMessage={handleSendMessage} disabled={isStreaming} />
-      </Paper>
+        {/* Left Side Buffer */}
+        <Box
+          sx={{
+            flex: '0 0 auto',
+            width: { xs: '2%', sm: '5%', md: '8%', lg: '12%' }, // Responsive widths
+            minWidth: '10px', // Minimum buffer width
+            backgroundColor: 'background.default' // Optional: add background color
+          }}
+        />
+        
+        {/* Main Chat Container */}
+        <Box
+          sx={{
+            flex: '1 1 auto',
+            maxWidth: { xs: '96%', sm: '90%', md: '84%', lg: '76%' }, // Responsive max widths
+            minWidth: '300px', // Minimum width for usability
+            display: 'flex',
+            flexDirection: 'column'
+          }}
+        >
+          <Paper
+            elevation={0}
+            sx={{
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              borderRadius: 0
+            }}
+          >
+            {/* Middle Content Area - Conditional rendering */}
+            <Box
+              sx={{
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden'
+              }}
+            >
+              {showWelcomeScreen ? (
+                <WelcomeScreen />
+              ) : (
+                <ActiveChatView messages={messages} />
+              )}
+            </Box>
+            
+            {/* Input Section - Always visible */}
+            <MessageInput onSendMessage={handleSendMessage} disabled={isStreaming} />
+          </Paper>
+        </Box>
+        
+        {/* Right Side Buffer */}
+        <Box
+          sx={{
+            flex: '0 0 auto',
+            width: { xs: '2%', sm: '5%', md: '8%', lg: '12%' }, // Responsive widths
+            minWidth: '10px', // Minimum buffer width
+            backgroundColor: 'background.default' // Optional: add background color
+          }}
+        />
+      </Box>
     </Box>
   );
 };

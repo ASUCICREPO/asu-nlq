@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Box, TextField, IconButton, Paper } from '@mui/material';
+import { Box, TextField, IconButton, InputAdornment } from '@mui/material';
 import { Send } from '@mui/icons-material';
 
 const MessageInput = ({ onSendMessage, disabled = false }) => {
@@ -23,7 +23,7 @@ const MessageInput = ({ onSendMessage, disabled = false }) => {
     }
   };
 
-  const handleKeyPress = (event) => {
+  const handleKeyDown = (event) => {
     if (event.key === 'Enter' && !event.shiftKey && !disabled) {
       event.preventDefault();
       handleSend();
@@ -37,57 +37,77 @@ const MessageInput = ({ onSendMessage, disabled = false }) => {
   const isInputDisabled = isDisabled || disabled;
 
   return (
-    <Paper
-      elevation={0}
+    <Box
       sx={{
-        borderTop: 1,
-        borderColor: 'divider',
-        padding: 2
+        position: 'fixed',
+        bottom: 100, // Significantly increased from 60 to 120px for much larger gap
+        left: '9%',
+        right: '9%',
+        width: 'auto',
+        zIndex: 1000
       }}
     >
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'flex-end',
-          gap: 1
+      <TextField
+        fullWidth
+        multiline
+        maxRows={4}
+        variant="outlined"
+        placeholder={disabled ? "Waiting for response..." : "Type your question here..."}
+        value={inputText}
+        onChange={handleInputChange}
+        onKeyDown={handleKeyDown}
+        disabled={isInputDisabled}
+        InputProps={{
+          endAdornment: (
+            <InputAdornment position="end">
+              <IconButton
+                onClick={handleSend}
+                disabled={isInputDisabled || !inputText.trim()}
+                sx={{
+                  backgroundColor: 'transparent',
+                  color: 'grey.700', // Changed to dark grey for rest state
+                  '&:hover': {
+                    backgroundColor: 'grey.200',
+                    color: 'grey.800' // Slightly darker on hover
+                  },
+                  '&.Mui-disabled': {
+                    backgroundColor: 'transparent',
+                    color: 'grey.700'
+                  }
+                }}
+              >
+                <Send />
+              </IconButton>
+            </InputAdornment>
+          )
         }}
-      >
-        <TextField
-          fullWidth
-          multiline
-          maxRows={4}
-          variant="outlined"
-          placeholder={disabled ? "Waiting for response..." : "Type your message..."}
-          value={inputText}
-          onChange={handleInputChange}
-          onKeyPress={handleKeyPress}
-          disabled={isInputDisabled}
-          sx={{
-            '& .MuiOutlinedInput-root': {
-              borderRadius: 3
-            }
-          }}
-        />
-        <IconButton
-          color="primary"
-          onClick={handleSend}
-          disabled={isInputDisabled || !inputText.trim()}
-          sx={{
-            bgcolor: 'primary.main',
-            color: 'white',
-            '&:hover': {
-              bgcolor: 'primary.dark'
+        sx={{
+          '& .MuiOutlinedInput-root': {
+            borderRadius: '50px', // Changed from 6 to 50px for practically circular ends
+            backgroundColor: 'background.paper',
+            color: 'black', // Set text color to black
+            '& fieldset': {
+              borderColor: '#d0d0d0',
+              borderWidth: '2px',
+              borderRadius: '50px' // Ensure the fieldset also has circular ends
             },
-            '&.Mui-disabled': {
-              bgcolor: 'grey.300',
-              color: 'grey.500'
+            '&:hover fieldset': {
+              borderColor: '#b0b0b0'
+            },
+            '&.Mui-focused fieldset': {
+              borderColor: '#a0a0a0'
             }
-          }}
-        >
-          <Send />
-        </IconButton>
-      </Box>
-    </Paper>
+          },
+          '& .MuiOutlinedInput-input': {
+            paddingLeft: '24px' // Add left padding for cursor offset
+          },
+          '& .MuiOutlinedInput-input::placeholder': {
+            color: '#333333',
+            opacity: 1
+          }
+        }}
+      />
+    </Box>
   );
 };
 
