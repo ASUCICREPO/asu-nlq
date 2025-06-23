@@ -21,24 +21,52 @@ resource "aws_s3_bucket" "asu_nlq_frontend_store_bucket" {
 
 resource "aws_s3_bucket_policy" "asu_nlq_frontend_store_bucket_policy" {
   bucket = aws_s3_bucket.asu_nlq_frontend_store_bucket.id
+  
   policy = jsonencode({
     "Version": "2012-10-17",
     "Statement": [
       {
-        "Sid": "VisualEditor0",
+        "Sid": "AllowAmplifyToListBucket",
         "Effect": "Allow",
         "Principal": {
-          "AWS": "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+          "Service": "amplify.amazonaws.com"
         },
-        "Action": [
-          "s3:GetObjectAcl",
-          "s3:PutObjectVersionAcl",
-          "s3:PutObjectAcl"
-        ],
+        "Action": "s3:ListBucket",
+        "Resource": "${aws_s3_bucket.asu_nlq_frontend_store_bucket.arn}",
+        "Condition": {
+          "StringEquals": {
+            "aws:SourceAccount": "${data.aws_caller_identity.current.account_id}"
+          }
+        }
+      },
+      {
+        "Sid": "AllowAmplifyToGetObjects",
+        "Effect": "Allow",
+        "Principal": {
+          "Service": "amplify.amazonaws.com"
+        },
+        "Action": "s3:GetObject",
+        "Resource": "${aws_s3_bucket.asu_nlq_frontend_store_bucket.arn}/*",
+        "Condition": {
+          "StringEquals": {
+            "aws:SourceAccount": "${data.aws_caller_identity.current.account_id}"
+          }
+        }
+      },
+      {
+        "Sid": "DenyInsecureConnections",
+        "Effect": "Deny",
+        "Principal": "*",
+        "Action": "s3:*",
         "Resource": [
           "${aws_s3_bucket.asu_nlq_frontend_store_bucket.arn}",
           "${aws_s3_bucket.asu_nlq_frontend_store_bucket.arn}/*"
-        ]
+        ],
+        "Condition": {
+          "Bool": {
+            "aws:SecureTransport": "false"
+          }
+        }
       }
     ]
   })
