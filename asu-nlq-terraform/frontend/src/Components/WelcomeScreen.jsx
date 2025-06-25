@@ -34,7 +34,7 @@ const WelcomeScreen = () => {
               textAlign: 'center',
               mb: { xs: 4, md: 6 },
               mt: { xs: 8, md: 10 },
-              maxWidth: '600px',
+              maxWidth: { xs: '100%', sm: '900px', md: '1000px', lg: '1100px' }, // Expanded from 600px
               mx: 'auto'
             }}
           >
@@ -55,17 +55,17 @@ const WelcomeScreen = () => {
               sx={{
                 color: 'text.secondary',
                 fontWeight: 400,
-                whiteSpace: 'nowrap',
                 textAlign: 'center',
-                width: '100vw',
-                marginLeft: 'calc(-50vw + 50%)',
-                fontSize: '1.75rem'
+                fontSize: { xs: '0.7rem', sm: '1.0rem', md: '1.25rem', lg: '1.5rem' },
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                width: '100%'
               }}
             >
               Ask questions about ASU enrollment, demographics, academic programs — all in plain English.
             </Typography>
           </Box>
-
           {/* Boxes Section */}
           <Box
             sx={{

@@ -16,16 +16,17 @@ const MessageList = ({ messages }) => {
         flex: 1,
         overflow: 'auto',
         padding: 2,
+        margin: '20px 0', // Increased margin top and bottom
         display: 'flex',
         flexDirection: 'column',
-        gap: 1
+        gap: 2
       }}
     >
       {messages.map((message, index) => {
         // Extract the text content from the message structure
         const messageText = message.content?.[0]?.text || '';
         const sender = message.role; // 'user' or 'assistant'
-        
+
         return (
           <MessageBubble
             key={index}

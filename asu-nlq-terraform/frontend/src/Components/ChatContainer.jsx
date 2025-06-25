@@ -121,75 +121,50 @@ const ChatContainer = () => {
         <ChatHeader />
       </Box>
       
-      {/* Main Content Area with Buffers */}
+      {/* Main Content Area - Matches Header Padding */}
       <Box
         sx={{
           flex: 1,
           display: 'flex',
-          flexDirection: 'row',
-          overflow: 'hidden'
+          flexDirection: 'column',
+          overflow: 'hidden',
+          paddingX: '7%' // Same padding as header
         }}
       >
-        {/* Left Side Buffer */}
-        <Box
+        <Paper
+          elevation={0}
           sx={{
-            flex: '0 0 auto',
-            width: { xs: '2%', sm: '5%', md: '8%', lg: '12%' }, // Responsive widths
-            minWidth: '10px', // Minimum buffer width
-            backgroundColor: 'background.default' // Optional: add background color
-          }}
-        />
-        
-        {/* Main Chat Container */}
-        <Box
-          sx={{
-            flex: '1 1 auto',
-            maxWidth: { xs: '96%', sm: '90%', md: '84%', lg: '76%' }, // Responsive max widths
-            minWidth: '300px', // Minimum width for usability
+            flex: 1,
             display: 'flex',
-            flexDirection: 'column'
+            flexDirection: 'column',
+            overflow: 'hidden',
+            borderRadius: 0
           }}
         >
-          <Paper
-            elevation={0}
+          {/* Middle Content Area - Conditional rendering */}
+          <Box
             sx={{
               flex: 1,
               display: 'flex',
               flexDirection: 'column',
               overflow: 'hidden',
-              borderRadius: 0
+              paddingBottom: '180px' // Reserve space for the fixed MessageInput (100px bottom + 80px margin)
             }}
           >
-            {/* Middle Content Area - Conditional rendering */}
-            <Box
-              sx={{
-                flex: 1,
-                display: 'flex',
-                flexDirection: 'column',
-                overflow: 'hidden'
-              }}
-            >
-              {showWelcomeScreen ? (
-                <WelcomeScreen />
-              ) : (
-                <ActiveChatView messages={messages} />
-              )}
-            </Box>
-            
-            {/* Input Section - Always visible */}
-            <MessageInput onSendMessage={handleSendMessage} disabled={isStreaming} />
-          </Paper>
-        </Box>
-        
-        {/* Right Side Buffer */}
-        <Box
-          sx={{
-            flex: '0 0 auto',
-            width: { xs: '2%', sm: '5%', md: '8%', lg: '12%' }, // Responsive widths
-            minWidth: '10px', // Minimum buffer width
-            backgroundColor: 'background.default' // Optional: add background color
-          }}
-        />
+            {showWelcomeScreen ? (
+              <WelcomeScreen />
+            ) : (
+              <ActiveChatView messages={messages} />
+            )}
+          </Box>
+          
+          {/* Input Section - Always visible */}
+          <MessageInput 
+            onSendMessage={handleSendMessage} 
+            disabled={isStreaming} 
+            isResponding={isStreaming}
+          />
+        </Paper>
       </Box>
     </Box>
   );

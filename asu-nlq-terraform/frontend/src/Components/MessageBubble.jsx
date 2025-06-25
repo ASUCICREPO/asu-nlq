@@ -1,7 +1,8 @@
 import React from 'react';
 import { Box, Paper, Typography, Avatar } from '@mui/material';
-import { Person, SmartToy } from '@mui/icons-material';
+import { Person } from '@mui/icons-material';
 import ReactMarkdown from 'react-markdown';
+import Logo from '../Assets/logo.svg';
 
 const MessageBubble = ({ message, sender }) => {
   const isUser = sender === 'user';
@@ -12,32 +13,39 @@ const MessageBubble = ({ message, sender }) => {
       sx={{
         display: 'flex',
         justifyContent: isUser ? 'flex-end' : 'flex-start',
-        alignItems: 'flex-start',
-        gap: 1,
+        alignItems: 'center',
+        gap: isUser ? 1.5 : 2.5,
         mb: 1
       }}
     >
       {!isUser && (
-        <Avatar
+        <Box
           sx={{
-            width: 32,
-            height: 32,
-            bgcolor: 'primary.main'
+            width: 48,
+            height: 48,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
           }}
         >
-          <SmartToy fontSize="small" />
-        </Avatar>
+          <img
+            src={Logo}
+            alt="Assistant Logo"
+            style={{
+              width: '56px',
+              height: '56px'
+            }}
+          />
+        </Box>
       )}
       <Paper
-        elevation={1}
+        elevation={0}
         sx={{
           maxWidth: '70%',
-          padding: 1.5,
-          backgroundColor: isUser ? 'primary.main' : 'grey.100',
-          color: isUser ? 'primary.contrastText' : 'text.primary',
-          borderRadius: 2,
-          borderTopRightRadius: isUser ? 0.5 : 2,
-          borderTopLeftRadius: isUser ? 2 : 0.5,
+          padding: 2,
+          backgroundColor: isUser ? '#8c1d40' : '#ffc627',
+          color: isUser ? 'white' : 'black',
+          borderRadius: '25px',
           minHeight: isAssistant && !message ? '24px' : 'auto' // Show placeholder for empty streaming messages
         }}
       >
@@ -79,13 +87,13 @@ const MessageBubble = ({ message, sender }) => {
               <Typography component="em" sx={{ fontStyle: 'italic' }} {...props} />
             ),
             ul: ({ node, ...props }) => (
-              <Box component="ul" sx={{ margin: '8px 0', paddingLeft: 2 }} {...props} />
+              <Box component="ul" sx={{ margin: '8px 0', paddingLeft: 2, textAlign: 'left' }} {...props} />
             ),
             ol: ({ node, ...props }) => (
-              <Box component="ol" sx={{ margin: '8px 0', paddingLeft: 2 }} {...props} />
+              <Box component="ol" sx={{ margin: '8px 0', paddingLeft: 2, textAlign: 'left' }} {...props} />
             ),
             li: ({ node, ...props }) => (
-              <Typography component="li" variant="body1" sx={{ marginBottom: 0.5 }} {...props} />
+              <Typography component="li" variant="body1" sx={{ marginBottom: 0.5, textAlign: 'left', display: 'list-item' }} {...props} />
             ),
             h1: ({ node, ...props }) => (
               <Typography variant="h6" component="h1" sx={{ fontWeight: 'bold', margin: '8px 0 4px 0' }} {...props} />
@@ -115,15 +123,25 @@ const MessageBubble = ({ message, sender }) => {
         </ReactMarkdown>
       </Paper>
       {isUser && (
-        <Avatar
+        <Box
           sx={{
-            width: 32,
-            height: 32,
-            bgcolor: 'secondary.main'
+            width: 48,
+            height: 48,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
           }}
         >
-          <Person fontSize="small" />
-        </Avatar>
+          <Avatar
+            sx={{
+              width: 48,
+              height: 48,
+              bgcolor: '#8c1d40'
+            }}
+          >
+            <Person fontSize="large" />
+          </Avatar>
+        </Box>
       )}
     </Box>
   );
