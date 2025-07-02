@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Box, TextField, IconButton, InputAdornment } from '@mui/material';
-import { Send } from '@mui/icons-material';
+import { Send, Refresh } from '@mui/icons-material';
 
 const MessageInput = ({ onSendMessage, disabled = false }) => {
   const [inputText, setInputText] = useState('');
@@ -21,6 +21,10 @@ const MessageInput = ({ onSendMessage, disabled = false }) => {
     } finally {
       setIsDisabled(false);
     }
+  };
+
+  const handleRefresh = () => {
+    window.location.reload();
   };
 
   const handleKeyDown = (event) => {
@@ -44,9 +48,27 @@ const MessageInput = ({ onSendMessage, disabled = false }) => {
         left: '9%',
         right: '9%',
         width: 'auto',
-        zIndex: 1000
+        zIndex: 1000,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1
       }}
     >
+      <IconButton
+        onClick={handleRefresh}
+        sx={{
+          backgroundColor: 'transparent',
+          color: 'grey.700',
+          '&:hover': {
+            backgroundColor: 'grey.200',
+            color: 'grey.800'
+          }
+        }}
+        aria-label="Refresh page"
+      >
+        <Refresh />
+      </IconButton>
+      
       <TextField
         fullWidth
         multiline
@@ -75,6 +97,7 @@ const MessageInput = ({ onSendMessage, disabled = false }) => {
                     color: 'grey.700'
                   }
                 }}
+                aria-label="Send message"
               >
                 <Send />
               </IconButton>
