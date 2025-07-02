@@ -31,18 +31,6 @@ resource "aws_s3_object" "asu_nlq_chatbot_database_descriptions_upload" {
   content_type = "application/json"
 }
 
-# Upload the database file to S3
-resource "aws_s3_object" "asu_nlq_chatbot_database_upload" {
-  bucket = aws_s3_bucket.asu_nlq_chatbot_database_descriptions_bucket.id
-  key    = "${var.database_name}.db"
-  source = "${path.root}/S3/${var.database_name}.db"
-  etag   = filemd5("${path.root}/S3/${var.database_name}.db")
-
-  depends_on = [aws_s3_bucket.asu_nlq_chatbot_database_descriptions_bucket]
-
-  content_type = "application/vnd.sqlite3"
-}
-
 
 ####################################################################################################
 #This section defines the IAM policies and roles for the lambda functions
@@ -246,11 +234,8 @@ resource "aws_lambda_function" "asu_nlq_chatbot_orchestration_lambda" {
   source_code_hash = data.archive_file.orchestration_lambda_zip.output_base64sha256
 
   runtime = "python3.13"
-  timeout = 60
+  timeout = 600
   memory_size = 256
-  layers = [
-    "arn:aws:lambda:${var.aws_region}:336392948345:layer:AWSSDKPandas-Python313:1" # AWS SDK for Pandas layer
-  ]
 
   environment {
     variables = {

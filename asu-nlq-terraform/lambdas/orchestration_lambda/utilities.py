@@ -3,15 +3,11 @@ from botocore.exceptions import ClientError
 import json
 import logging
 import traceback
-import constants
-import sqlite3
-import pandas as pd
-
 import constants  # This configures logging
-
 logger = logging.getLogger(__name__)
 
 
+# A function to initialize and return all AWS service clients
 def get_clients():
     """Initialize and return all AWS service clients"""
     logger.info("Initializing AWS clients")
@@ -33,11 +29,11 @@ def get_clients():
         logger.error(f"Failed to initialize AWS clients: {e}")
         raise
 
-
 # Initialize AWS service clients
 gateway, bedrock, s3_client, agent = get_clients()
 
 
+# Function to send JSON data to client via WebSocket connection
 def send_to_gateway(connectionId, json_data):
     """Send JSON data to client via WebSocket connection"""
     logger.info(f"Sending data to connection: {connectionId}")
@@ -57,6 +53,7 @@ def send_to_gateway(connectionId, json_data):
         raise
 
 
+# Function to converse with Bedrock AI model
 def converse_with_model(modelId, chatHistory, config=None, system=None, streaming=False):
     """Get response from Bedrock AI model with optional streaming"""
     logger.info(f"Conversing with model: {modelId}, streaming: {streaming}")
@@ -89,6 +86,7 @@ def converse_with_model(modelId, chatHistory, config=None, system=None, streamin
         raise
 
 
+# Function to parse streaming response and send events to client
 def parse_and_send_response(response, connectionId, classic=None, pure=None):
     """Parse streaming response and send events to client in real-time"""
     logger.info("Parsing and sending response")
@@ -151,6 +149,7 @@ def parse_and_send_response(response, connectionId, classic=None, pure=None):
         raise
 
 
+# Function to download and parse JSON file from S3 bucket
 def download_s3_json(bucket_name=None, file_key=None):
     """Download and parse JSON file from S3 bucket"""
     bucket = bucket_name or constants.DATABASE_DESCRIPTIONS_S3_NAME
@@ -180,6 +179,7 @@ def download_s3_json(bucket_name=None, file_key=None):
         raise
 
 
+# Function to create a formatted conversation history for AI model input
 def create_history(chatHistory):
     """Create a formatted conversation history for AI model input"""
     logger.info(f"Creating history from {len(chatHistory)} messages")
@@ -201,55 +201,6 @@ def create_history(chatHistory):
         logger.error(f"Failed to create history: {e}")
         raise
 
-
-def download_database_from_s3(bucket_name=None, file_key=None):
-    """Download database file from S3 and return local filepath"""
-    bucket = bucket_name or constants.DATABASE_DESCRIPTIONS_S3_NAME
-    key = file_key or (constants.DATABASE_NAME + ".db")
-    local_path = f"/tmp/{constants.DATABASE_NAME}"
-    
-    logger.info(f"Downloading database from S3: {bucket}/{key}")
-    
-    try:
-        # Download the database file from S3
-        s3_client.download_file(bucket, key, local_path)
-        
-        logger.info(f"Database downloaded to: {local_path}")
-        return local_path
-        
-    except ClientError as e:
-        logger.error(f"S3 client error downloading database: {e}")
-        raise
-    except Exception as e:
-        logger.error(f"Failed to download database: {e}")
-        raise
-
-
-def execute_sql_query(db_path, sql_statement):
-    """Execute SQL query on database and return results as DataFrame"""
-    logger.info(f"Executing SQL query on: {db_path}")
-    
-    try:
-        # Connect to the database
-        conn = sqlite3.connect(db_path)
-        
-        # Execute query and create DataFrame
-        df_result = pd.read_sql_query(sql_statement, conn)
-        
-        # Close the connection
-        conn.close()
-        
-        logger.info(f"Query executed successfully, returned {len(df_result)} rows")
-        return df_result.to_string()
-        
-    except sqlite3.Error as e:
-        logger.error(f"SQLite error: {e}")
-        logger.error(f"Failed query: {sql_statement}")
-        raise
-    except Exception as e:
-        logger.error(f"Query execution failed: {e}")
-        logger.error(f"Failed query: {sql_statement}")
-        raise
 
 # Function to execute a knowledge base query using Bedrock Agent Runtime
 def execute_knowledge_base_query(questions):
@@ -274,6 +225,7 @@ def execute_knowledge_base_query(questions):
             raise
     return results_array
 
+
 # A function that nicely formats the results for the final response, follows "Question asked was : Question" "The answer found was: Answer"
 def format_results_for_response(questions, results):
     """Format results for final response"""
@@ -292,4 +244,3 @@ def format_results_for_response(questions, results):
         logger.error(f"Failed to format results: {e}")
         raise
     
-

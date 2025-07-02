@@ -1,13 +1,12 @@
-"""
-Chatbot Configuration Manager
-Handles prompts, configuration settings, and model IDs for different chatbot interaction types.
-"""
-
 import logging
-from prompts import final_response, classify, no_sql, create_question, attributes_json, sql_generation, error
-
+from prompts import (
+    final_response, 
+    classify, 
+    no_sql, 
+    create_question, 
+    error
+) 
 import constants  # This configures logging
-
 logger = logging.getLogger(__name__)
 
 
@@ -27,20 +26,35 @@ no_sql_id = "us.amazon.nova-pro-v1:0"
 # Model ID for creating specific questions for SQL generation
 create_question_id = "us.amazon.nova-pro-v1:0"
 
-# Model ID for attributes JSON generation
-attributes_json_id = "us.amazon.nova-pro-v1:0"
-
-# Model ID for SQL generation
-sql_generation_id = "us.amazon.nova-pro-v1:0"
-
 # Model ID for error handling (default case)
 error_id = "us.amazon.nova-pro-v1:0"
 
 
 # ============================================================================
-# PROMPT RETRIEVAL FUNCTION
+# TEMPERATURE DEFINITIONS
 # ============================================================================
 
+# Temperature for final response generation
+final_response_temperature = 0.4
+
+# Temperature for classification tasks
+classify_temperature = 0.1
+
+# Temperature for NoSQL query handling
+no_sql_temperature = 0.4
+
+# Temperature for creating specific questions for SQL generation
+create_question_temperature = 0.1
+
+# Default temperature for unknown types
+default_temperature = 0.3
+
+
+# ============================================================================
+# RETRIEVAL FUNCTIONS
+# ============================================================================
+
+# This function retrieves the appropriate prompt based on the type of interaction.
 def get_prompt(type, message=None, schema=None, chatHistory=None, reasoning=None, attributes=None, results=None):
     """
     Returns the appropriate prompt based on the specified type.
@@ -59,10 +73,6 @@ def get_prompt(type, message=None, schema=None, chatHistory=None, reasoning=None
                 prompt = no_sql.no_sql_prompt.format(schema=schema, reasoning=reasoning)
             case "create_question":
                 prompt = create_question.create_question_prompt.format(message=message, chatHistory=chatHistory, schema=schema, reasoning=reasoning)
-            case "attributes_json":
-                prompt = attributes_json.attributes_json_prompt.format(message=message, schema=schema)
-            case "sql_generation":
-                prompt = sql_generation.sql_generation_prompt.format(message=message, schema=schema, attributes=attributes)
             case _:
                 logger.warning(f"Unknown prompt type: {type}, using error prompt")
                 prompt = error.error_prompt
@@ -87,10 +97,7 @@ def get_prompt(type, message=None, schema=None, chatHistory=None, reasoning=None
         raise
 
 
-# ============================================================================
-# CONFIGURATION RETRIEVAL FUNCTION
-# ============================================================================
-
+# This function retrieves the configuration settings based on the type of interaction.
 def get_config(type):
     """
     Returns configuration settings based on the specified type.
@@ -103,32 +110,24 @@ def get_config(type):
         match type:
             case "final_response":
                 config = {
-                    "temperature": 0.4,
+                    "temperature": final_response_temperature,
                 }
             case "classify":
                 config = {
-                    "temperature": 0.1,
+                    "temperature": classify_temperature,
                 }
             case "no_sql":
                 config = {
-                    "temperature": 0.4,
+                    "temperature": no_sql_temperature,
                 }
             case "create_question":
                 config = {
-                    "temperature": 0.1,
-                }
-            case "attributes_json":
-                config = {
-                    "temperature": 0.1,
-                }
-            case "sql_generation":
-                config = {
-                    "temperature": 0.1,
+                    "temperature": create_question_temperature,
                 }
             case _:
                 logger.warning(f"Unknown config type: {type}, using default")
                 config = {
-                    "temperature": 0.3,
+                    "temperature": default_temperature,
                 }
         
         logger.info(f"Config retrieved for type: {type}")
@@ -139,10 +138,7 @@ def get_config(type):
         raise
 
 
-# ============================================================================
-# MODEL ID RETRIEVAL FUNCTION
-# ============================================================================
-
+# This function retrieves the appropriate model ID based on the type of interaction.
 def get_id(type):
     """
     Returns the appropriate model ID based on the specified type.
@@ -161,10 +157,6 @@ def get_id(type):
                 model_id = no_sql_id  
             case "create_question":
                 model_id = create_question_id
-            case "attributes_json":
-                model_id = attributes_json_id
-            case "sql_generation":
-                model_id = sql_generation_id
             case _:
                 logger.warning(f"Unknown model type: {type}, using error model")
                 model_id = error_id
@@ -175,3 +167,4 @@ def get_id(type):
     except Exception as e:
         logger.error(f"Failed to get model ID for type {type}: {e}")
         raise
+

@@ -5,9 +5,10 @@ import traceback
 import constants  # This configures logging
 from orchestration import orchestrate
 from botocore.exceptions import ClientError
-
 logger = logging.getLogger(__name__)
 
+
+# the main entry point for the AWS Lambda function
 def lambda_handler(event, context):
     """
     AWS Lambda handler for processing chatbot requests.
@@ -55,3 +56,5 @@ def lambda_handler(event, context):
         logger.error(f"Unexpected error: {e}")
         logger.debug(f"Unexpected error traceback: {traceback.format_exc()}")
         return {"statusCode": 500, "body": "Internal error"}
+    
+    

@@ -1,11 +1,6 @@
 import os
 import logging
 
-"""
-Constants for NLQ project
-This module contains configuration constants used throughout the application
-"""
-
 # ============================================================================
 # LOGGING CONFIGURATION
 # ============================================================================
@@ -49,3 +44,4 @@ if not DATABASE_DESCRIPTIONS_S3_NAME:
 KNOWLEDGE_BASE_ID = os.environ.get("KNOWLEDGE_BASE_ID")
 if not KNOWLEDGE_BASE_ID:
     raise ValueError("KNOWLEDGE_BASE_ID environment variable is required")
+
