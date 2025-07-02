@@ -24,9 +24,10 @@ def get_clients():
         gateway = boto3.client("apigatewaymanagementapi", endpoint_url=apiGatewayURL)
         bedrock = boto3.client('bedrock-runtime')
         s3_client = boto3.client('s3')
+        agent = boto3.client('bedrock-agent-runtime')
         
         logger.info("AWS clients initialized successfully")
-        return gateway, bedrock, s3_client
+        return gateway, bedrock, s3_client, agent
         
     except Exception as e:
         logger.error(f"Failed to initialize AWS clients: {e}")
@@ -34,7 +35,7 @@ def get_clients():
 
 
 # Initialize AWS service clients
-gateway, bedrock, s3_client = get_clients()
+gateway, bedrock, s3_client, agent = get_clients()
 
 
 def send_to_gateway(connectionId, json_data):
@@ -249,3 +250,46 @@ def execute_sql_query(db_path, sql_statement):
         logger.error(f"Query execution failed: {e}")
         logger.error(f"Failed query: {sql_statement}")
         raise
+
+# Function to execute a knowledge base query using Bedrock Agent Runtime
+def execute_knowledge_base_query(questions):
+    results_array = []
+    for specific_question in questions:
+        try:
+            # Set up the knowledge base ID and retrieval configuration
+            knowledge_base_id = constants.KNOWLEDGE_BASE_ID
+            query = {
+                'text': specific_question
+            }
+            #Retrive from the Knowledge base
+            logger.info(f"Retrieving from knowledge base with query: {query}")
+            kb_results = agent.retrieve(knowledgeBaseId=knowledge_base_id, retrievalQuery=query)
+            # get the results from the knowledge base
+            results = str(kb_results['retrievalResults'][0]['content']['row'])
+            query_value = kb_results['retrievalResults'][0]['location']['sqlLocation']['query']
+            print("Knowledge base retrieval query:", query_value) # Don't use logger as this should always be printed
+            results_array.append(results)
+        except Exception as e:
+            logger.error(f"Knowledge base retrieval failed: {e}")
+            raise
+    return results_array
+
+# A function that nicely formats the results for the final response, follows "Question asked was : Question" "The answer found was: Answer"
+def format_results_for_response(questions, results):
+    """Format results for final response"""
+    logger.info("Formatting results for final response")
+    
+    try:
+        formatted_results = []
+        for question, result in zip(questions, results):
+            formatted_results.append(f"Question asked was: {question}\nThe answer found was: {result}")
+        
+        final_response = "\n\n".join(formatted_results)
+        logger.info("Results formatted successfully")
+        return final_response
+        
+    except Exception as e:
+        logger.error(f"Failed to format results: {e}")
+        raise
+    
+

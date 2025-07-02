@@ -258,6 +258,7 @@ resource "aws_lambda_function" "asu_nlq_chatbot_orchestration_lambda" {
       DATABASE_DESCRIPTIONS_S3_NAME = aws_s3_bucket.asu_nlq_chatbot_database_descriptions_bucket.id,
       TEMPLATE_NAME = var.template_name,
       DATABASE_NAME = var.database_name
+      KNOWLEDGE_BASE_ID = var.knowledge_base_id,
     }
   }
 }

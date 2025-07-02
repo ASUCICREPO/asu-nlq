@@ -17,3 +17,8 @@ variable "database_name" {
   description = "The name of the database file used."
   type        = string
 }
+
+variable "knowledge_base_id" {
+  description = "The ID of the knowledge base to be used in the backend."
+  type        = string
+}

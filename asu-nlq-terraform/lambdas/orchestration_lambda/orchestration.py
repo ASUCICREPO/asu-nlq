@@ -2,7 +2,7 @@ import json
 import logging
 import traceback
 from chatbot_config import get_prompt, get_config, get_id
-from utilities import converse_with_model, parse_and_send_response, download_s3_json, create_history, download_database_from_s3, execute_sql_query
+from utilities import converse_with_model, parse_and_send_response, download_s3_json, create_history, download_database_from_s3, execute_sql_query, execute_knowledge_base_query, format_results_for_response
 
 import constants  # This configures logging
 
@@ -128,11 +128,10 @@ def respond_to_nosql_query(chatHistory, schema, reasoning):
 def respond_to_sql_query(chatHistory, schema, reasoning):
     """
     Handle SQL queries through multi-stage pipeline:
-    1. Create specific question
-    2. Extract relevant attributes  
-    3. Generate SQL queries
-    4. Execute queries on database
-    5. Generate natural language response
+    1. Create specific question from user input
+    2. Retrieve answers from the database
+    3. Generate final response based on query results.
+    This orchestrates the entire SQL query process, ensuring robust error handling.
     """
     logger.info("Starting SQL query pipeline")
     
@@ -140,41 +139,70 @@ def respond_to_sql_query(chatHistory, schema, reasoning):
         # Stage 1: Create specific question
         logger.info("Creating specific question")
         response = create_question(message=chatHistory[-1], chatHistory=chatHistory, schema=schema, reasoning=reasoning)
-        specific_question = json.loads(response["output"]["message"]["content"][0]["text"])
+        specific_question_json = json.loads(response["output"]["message"]["content"][0]["text"])
 
-        # Stage 2: Extract relevant attributes
-        logger.info("Extracting database attributes")
-        attribute_response = get_attributes_json(message=specific_question["improved_question"], schema=schema)
-        attribute_json = json.loads(attribute_response["output"]["message"]["content"][0]["text"])
+        # Check if the improved question is present in the response
+        if "improved_questions" not in specific_question_json:
+            logger.error("Improved question not found in response")
+            raise ValueError("Improved question missing from response")
+        specific_question = specific_question_json["improved_questions"]
+        print(f"Specific question created: {specific_question}") # Don't use logger, this should always be printed to the console
 
-        # Stage 3: Generate SQL queries
-        logger.info("Generating SQL queries")
-        queries_response = get_sql_queries(
-            message=specific_question["improved_question"], 
-            schema=schema, 
-            attributes=json.dumps(attribute_json, indent=4)
+
+        # Stage 2: get answers from the database
+        logger.info("Retrieving answers from the database")
+        results = retrieve_answers_from_database(
+            questions=specific_question, 
         )
-        queries = json.loads(queries_response["output"]["message"]["content"][0]["text"])
+        # Check if results are empty
+        if not results:
+            logger.warning("No results found for the specific question")
+            results = "No results found for your query."
 
-        # Stage 4: Execute queries
-        logger.info("Executing SQL queries")
-        database_path = download_database_from_s3()
+        # Format results for response
+        results = format_results_for_response(specific_question, results)
+
+
         
-        results = ""
-        for query in queries["queries"]:
-            try:
-                query_result = execute_sql_query(database_path, query)
-                results += f"{query}\n{query_result}\n\n"
-            except Exception as e:
-                logger.error(f"Query execution failed: {e}")
-                results += f"{query}\nError: {str(e)}\n\n"
 
-        # Stage 5: Generate final response
+
+        # OLD SYSTEM NOT RELEVEANT
+        # # Stage 2: Extract relevant attributes
+        # logger.info("Extracting database attributes")
+        # attribute_response = get_attributes_json(message=specific_question["improved_question"], schema=schema)
+        # attribute_json = json.loads(attribute_response["output"]["message"]["content"][0]["text"])
+
+        # # Stage 3: Generate SQL queries
+        # logger.info("Generating SQL queries")
+        # queries_response = get_sql_queries(
+        #     message=specific_question["improved_question"], 
+        #     schema=schema, 
+        #     attributes=json.dumps(attribute_json, indent=4)
+        # )
+        # queries = json.loads(queries_response["output"]["message"]["content"][0]["text"])
+
+        # # Stage 4: Execute queries
+        # logger.info("Executing SQL queries")
+        # database_path = download_database_from_s3()
+        
+        # results = ""
+        # for query in queries["queries"]:
+        #     try:
+        #         query_result = execute_sql_query(database_path, query)
+        #         results += f"{query}\n{query_result}\n\n"
+        #     except Exception as e:
+        #         logger.error(f"Query execution failed: {e}")
+        #         results += f"{query}\nError: {str(e)}\n\n"
+
+
+
+
+        # Stage 3: Generate final response
         logger.info("Generating final response")
         final_response = get_final_response(
             chatHistory=chatHistory, 
             schema=schema, 
-            specific_question=specific_question["improved_question"], 
+            specific_question=specific_question, 
             results=results
         )
         
@@ -220,71 +248,6 @@ def create_question(message, chatHistory, schema, reasoning):
         raise
 
 
-def get_attributes_json(message, schema):
-    """
-    Extract relevant database attributes for the given query.
-    Identifies which tables and columns are needed for the question.
-    """
-    logger.info("Extracting relevant attributes")
-    
-    try:
-        schema_json = json.dumps(schema, indent=4)
-
-        message_formatted = {
-            "role": "user",
-            "content": [{
-                "text": message,
-            }]
-        }
-        
-        response = converse_with_model(
-            get_id("attributes_json"),
-            [message_formatted],
-            config=get_config("attributes_json"),
-            system=get_prompt("attributes_json", message=message, schema=schema_json),
-            streaming=False
-        )
-        
-        return response
-        
-    except Exception as e:
-        logger.error(f"Attribute extraction failed: {e}")
-        raise
-
-
-def get_sql_queries(message, schema, attributes):
-    """
-    Generate optimized SQL queries based on the question and relevant attributes.
-    Creates efficient queries using identified schema elements.
-    """
-    logger.info("Generating SQL queries")
-    
-    try:
-        schema_json = json.dumps(schema, indent=4)
-
-        message_formatted = {
-            "role": "user",
-            "content": [{
-                "text": message,
-            }]
-        }
-
-        response = converse_with_model(
-            get_id("sql_generation"),
-            [message_formatted],
-            config=get_config("sql_generation"),
-            system=get_prompt("sql_generation", message=message, schema=schema_json, attributes=attributes),
-            streaming=False
-        )
-        
-        logger.info("SQL generation completed")
-        return response
-        
-    except Exception as e:
-        logger.error(f"SQL generation failed: {e}")
-        raise
-
-
 def get_final_response(chatHistory, schema, specific_question, results):
     """
     Convert SQL query results into natural language response.
@@ -309,3 +272,85 @@ def get_final_response(chatHistory, schema, specific_question, results):
     except Exception as e:
         logger.error(f"Final response generation failed: {e}")
         raise
+
+def retrieve_answers_from_database(questions):
+    """
+    Retrieve answers from the database based on the specific question.
+    This function executes the SQL queries and returns the results. - All inside bedrock knowledge bases
+    """
+    logger.info("Retrieving answers from the database")
+    try:
+        # Send question to the knowledge base
+        results = execute_knowledge_base_query(questions)
+        logger.info("Database query executed successfully")
+        return results
+    except Exception as e:
+        logger.error(f"Database retrieval failed: {e}")
+        raise
+
+
+# OLD SYSTEM NOT RELEVEANT
+# def get_attributes_json(message, schema):
+#     """
+#     Extract relevant database attributes for the given query.
+#     Identifies which tables and columns are needed for the question.
+#     """
+#     logger.info("Extracting relevant attributes")
+    
+#     try:
+#         schema_json = json.dumps(schema, indent=4)
+
+#         message_formatted = {
+#             "role": "user",
+#             "content": [{
+#                 "text": message,
+#             }]
+#         }
+        
+#         response = converse_with_model(
+#             get_id("attributes_json"),
+#             [message_formatted],
+#             config=get_config("attributes_json"),
+#             system=get_prompt("attributes_json", message=message, schema=schema_json),
+#             streaming=False
+#         )
+        
+#         return response
+        
+#     except Exception as e:
+#         logger.error(f"Attribute extraction failed: {e}")
+#         raise
+
+
+# OLD SYSTEM NOT RELEVEANT
+# def get_sql_queries(message, schema, attributes):
+#     """
+#     Generate optimized SQL queries based on the question and relevant attributes.
+#     Creates efficient queries using identified schema elements.
+#     """
+#     logger.info("Generating SQL queries")
+    
+#     try:
+#         schema_json = json.dumps(schema, indent=4)
+
+#         message_formatted = {
+#             "role": "user",
+#             "content": [{
+#                 "text": message,
+#             }]
+#         }
+
+#         response = converse_with_model(
+#             get_id("sql_generation"),
+#             [message_formatted],
+#             config=get_config("sql_generation"),
+#             system=get_prompt("sql_generation", message=message, schema=schema_json, attributes=attributes),
+#             streaming=False
+#         )
+        
+#         logger.info("SQL generation completed")
+#         return response
+        
+#     except Exception as e:
+#         logger.error(f"SQL generation failed: {e}")
+#         raise

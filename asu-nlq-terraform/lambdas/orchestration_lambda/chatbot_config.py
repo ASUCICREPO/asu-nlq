@@ -115,7 +115,7 @@ def get_config(type):
                 }
             case "create_question":
                 config = {
-                    "temperature": 0.3,
+                    "temperature": 0.1,
                 }
             case "attributes_json":
                 config = {

@@ -30,7 +30,6 @@ setup_logging()
 # DATABASE SCHEMA CONFIGURATION
 # ============================================================================
 
-# Template file containing the JSON schema definition for the database
 DATABASE_NAME = os.environ.get("DATABASE_NAME")
 if not DATABASE_NAME:
     raise ValueError("DATABASE_NAME environment variable is required")
@@ -46,3 +45,7 @@ if not API_GATEWAY_URL:
 DATABASE_DESCRIPTIONS_S3_NAME = os.environ.get("DATABASE_DESCRIPTIONS_S3_NAME")
 if not DATABASE_DESCRIPTIONS_S3_NAME:
     raise ValueError("DATABASE_DESCRIPTIONS_S3_NAME environment variable is required")
+
+KNOWLEDGE_BASE_ID = os.environ.get("KNOWLEDGE_BASE_ID")
+if not KNOWLEDGE_BASE_ID:
+    raise ValueError("KNOWLEDGE_BASE_ID environment variable is required")

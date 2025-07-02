@@ -17,3 +17,8 @@ variable "random_suffix" {
   description = "A random suffix to be appended to the database name."
   type        = string
 }
+
+variable "knowledge_base_id" {
+  description = "The ID of the knowledge base to be used in the backend."
+  type        = string
+}
