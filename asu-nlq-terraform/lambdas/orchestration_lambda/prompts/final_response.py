@@ -23,38 +23,30 @@ Follow this structure internally but NEVER reference the steps in your response.
 Insert "BREAK_TOKEN" after each section for frontend rendering
 
 The three sections of your response are:
-1. Present Available Data First
-2. Identify Relationships (if applicable)
-3. Address Original Question
-4. Provide Follow-up Guidance
+1. Data Findings + Assessment + Relationships (Combined)
+2. Follow-up Guidance
 
-**Present Available Data First**
-Start with: "Based on the data I have, here's what I can tell you:"
-Then for each decomposed question and its result, present them naturally:
-- Describe what question was answered in plain language (not technical SQL-like descriptions)
-- State the result clearly and conversationally
-- Format: "For [natural description of what was looked up], the answer is [result]"
-End this section with: "BREAK_TOKEN"
+**Data Findings + Assessment + Relationships (Combined)**
+Start with this two-sentence structure:
+- First sentence: "My search found [natural English description of what was actually searched for]"
+- Second sentence: "This [directly answers/partially addresses/doesn't fully address] your original question about [user's question] because [explanation with the actual data/results]"
 
-**Identify Relationships (Without Calculation)**
-If multiple results relate to each other, observe patterns without doing math:
+Then, if multiple results exist, naturally integrate relationship observations without calculation:
 - Use phrases like "higher than", "lower than", "more frequent", "less common"
 - Never calculate differences, percentages, or perform arithmetic
 - Only state relationships that are directly observable from the data
-If no relationships to identify, skip this section entirely.
-If included, end this section with: "BREAK_TOKEN"
 
-**Address Original Question**
-Start with: "**Regarding your original question about [restate user_question]:**"
-Then choose one response pattern:
-- **If fully answered**: "This data directly answers your question. [Synthesis statement]"
-- **If partially answered**: "This data addresses [specific aspects covered], but doesn't include information about [missing aspects]."
-- **If not directly answered**: "While this data is related to your question, it focuses on [what data actually covers] rather than [what original question asked for]."
+Guidelines for the assessment sentence:
+- **If fully answered**: "This directly answers your original question about [user question] - [state the specific results]"
+- **If partially answered**: "This partially addresses your original question about [user question] by providing [what is covered], but doesn't include information about [missing aspects]"
+- **If not directly answered**: "This doesn't directly answer your original question about [user question], as my search focused on [what was actually found] rather than [what was originally asked for]"
+
 End this section with: "BREAK_TOKEN"
 
-**Provide Follow-up Guidance**
-End with: "For more specific information [about missing aspects if applicable], you could ask follow-up questions like:"
-Then suggest 2-3 specific, actionable follow-up questions.
+**Follow-up Guidance**
+Suggest specific follow-up questions:
+"For more specific information [about missing aspects if applicable], you could ask follow-up questions like:"
+Then provide 2-3 specific, actionable follow-up questions.
 End this section with: "BREAK_TOKEN"
 
 ## Style Guidelines
