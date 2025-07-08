@@ -41,19 +41,11 @@ const ChatContainer = () => {
       setMessages(messagesWithPlaceholder);
 
       // Define callback for when bot message chunks are received
-      const onBotMessageReceived = (botMessage) => {
-        // Update the last message (assistant message) with the streaming content
+      const onBotMessageReceived = (botMessage, isNewMessage = false) => {
+        // Update messages based on whether this is a new message or updating existing
         setMessages(prevMessages => {
-          // We should always have at least the user message + assistant placeholder by now
-          if (prevMessages.length === 0) {
-            console.warn('No messages found when trying to update assistant response');
-            return prevMessages;
-          }
-
-          const lastMessage = prevMessages[prevMessages.length - 1];
-          // If last message isn't from assistant, we might need to add one
-          if (lastMessage?.role !== 'assistant') {
-            console.log('Last message is not assistant, adding new assistant message');
+          if (isNewMessage) {
+            // Create a completely new assistant message
             const newAssistantMessage = {
               role: "assistant",
               content: [
@@ -63,19 +55,41 @@ const ChatContainer = () => {
               ]
             };
             return [...prevMessages, newAssistantMessage];
-          }
+          } else {
+            // Update existing assistant message (original logic)
+            // We should always have at least the user message + assistant placeholder by now
+            if (prevMessages.length === 0) {
+              console.warn('No messages found when trying to update assistant response');
+              return prevMessages;
+            }
 
-          // Update existing assistant message
-          const newMessages = prevMessages.slice(0, -1); // All messages except last
-          const updatedLastMessage = {
-            role: "assistant",
-            content: [
-              {
-                text: botMessage
-              }
-            ]
-          };
-          return [...newMessages, updatedLastMessage];
+            const lastMessage = prevMessages[prevMessages.length - 1];
+            // If last message isn't from assistant, we might need to add one
+            if (lastMessage?.role !== 'assistant') {
+              console.log('Last message is not assistant, adding new assistant message');
+              const newAssistantMessage = {
+                role: "assistant",
+                content: [
+                  {
+                    text: botMessage
+                  }
+                ]
+              };
+              return [...prevMessages, newAssistantMessage];
+            }
+
+            // Update existing assistant message
+            const newMessages = prevMessages.slice(0, -1); // All messages except last
+            const updatedLastMessage = {
+              role: "assistant",
+              content: [
+                {
+                  text: botMessage
+                }
+              ]
+            };
+            return [...newMessages, updatedLastMessage];
+          }
         });
       };
 

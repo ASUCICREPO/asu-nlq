@@ -35,7 +35,7 @@ error_id = "us.amazon.nova-pro-v1:0"
 # ============================================================================
 
 # Temperature for final response generation
-final_response_temperature = 0.4
+final_response_temperature = 0.1
 
 # Temperature for classification tasks
 classify_temperature = 0.1
@@ -66,7 +66,7 @@ def get_prompt(type, message=None, schema=None, chatHistory=None, reasoning=None
         prompt = ""
         match type:
             case "final_response":
-                prompt = final_response.final_response_prompt.format(message=message, results=results, schema=schema)
+                prompt = final_response.final_response_prompt.format(results=results, schema=schema)
             case "classify":
                 prompt = classify.classify_prompt.format(message=message, schema=schema, chatHistory=chatHistory)
             case "no_sql":

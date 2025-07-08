@@ -6,7 +6,7 @@ import logging
 # ============================================================================
 
 # Logging configuration - change LOG_LEVEL to control all modules
-LOG_LEVEL = logging.WARNING  # or logging.DEBUG, logging.WARNING, etc.
+LOG_LEVEL = logging.INFO  # or logging.INFO, logging.WARNING, etc.
 LOG_FORMAT = '%(asctime)s - %(levelname)s - %(name)s - %(message)s'
 
 def setup_logging():

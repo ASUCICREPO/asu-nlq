@@ -36,7 +36,7 @@ gateway, bedrock, s3_client, agent = get_clients()
 # Function to send JSON data to client via WebSocket connection
 def send_to_gateway(connectionId, json_data):
     """Send JSON data to client via WebSocket connection"""
-    logger.info(f"Sending data to connection: {connectionId}")
+    logger.info(f"Sending data to connection: {json_data}")
     
     try:
         gateway.post_to_connection(
@@ -91,6 +91,10 @@ def parse_and_send_response(response, connectionId, classic=None, pure=None):
     """Parse streaming response and send events to client in real-time"""
     logger.info("Parsing and sending response")
     
+    # Initialize buffer for BREAK_TOKEN detection
+    buffer = ""
+    BREAK_TOKEN = "BREAK_TOKEN"
+    
     try:
         if classic:
             if pure:
@@ -104,7 +108,7 @@ def parse_and_send_response(response, connectionId, classic=None, pure=None):
             send_to_gateway(connectionId, json_data)
             logger.info("Classic response sent")
             return
-        
+            
         # Handle streaming response
         stream = response.get('stream')
         if stream:
@@ -115,11 +119,144 @@ def parse_and_send_response(response, connectionId, classic=None, pure=None):
                 # Handle content delta events (partial response chunks)
                 if "contentBlockDelta" in event:
                     contentBlockDelta = event["contentBlockDelta"]
-                    json_data = {
-                        "type": "contentBlockDelta",
-                        "data": contentBlockDelta
-                    }
-                    send_to_gateway(connectionId, json_data)
+                    delta_text = contentBlockDelta.get("delta", {}).get("text", "")
+                    print(f"Processing contentBlockDelta: {delta_text}")
+                    
+                    # Process BREAK_TOKEN detection
+                    if buffer == "":
+                        # Buffer is empty
+                        if BREAK_TOKEN in delta_text:
+                            # Full token found - split and send
+                            parts = delta_text.split(BREAK_TOKEN, 1)
+                            before_text = parts[0]
+                            after_text = parts[1] if len(parts) > 1 else ""
+                            
+                            # Send text before token (if exists)
+                            if before_text:
+                                json_data = {
+                                    "type": "contentBlockDelta",
+                                    "data": {
+                                        **contentBlockDelta,
+                                        "delta": {
+                                            **contentBlockDelta.get("delta", {}),
+                                            "text": before_text
+                                        }
+                                    }
+                                }
+                                send_to_gateway(connectionId, json_data)
+                            
+                            # Send break token message
+                            json_data = {
+                                "type": "breakTokenType"
+                            }
+                            send_to_gateway(connectionId, json_data)
+                            
+                            # Send text after token (if exists)
+                            if after_text:
+                                json_data = {
+                                    "type": "contentBlockDelta",
+                                    "data": {
+                                        **contentBlockDelta,
+                                        "delta": {
+                                            **contentBlockDelta.get("delta", {}),
+                                            "text": after_text
+                                        }
+                                    }
+                                }
+                                send_to_gateway(connectionId, json_data)
+                        else:
+                            # Check if delta ends with partial BREAK_TOKEN
+                            found_partial = False
+                            for i in range(1, min(len(delta_text) + 1, len(BREAK_TOKEN) + 1)):
+                                if delta_text.endswith(BREAK_TOKEN[:i]):
+                                    # Found partial match at end
+                                    prefix = delta_text[:-i]
+                                    suffix = delta_text[-i:]
+                                    
+                                    # Send prefix if exists
+                                    if prefix:
+                                        json_data = {
+                                            "type": "contentBlockDelta",
+                                            "data": {
+                                                **contentBlockDelta,
+                                                "delta": {
+                                                    **contentBlockDelta.get("delta", {}),
+                                                    "text": prefix
+                                                }
+                                            }
+                                        }
+                                        send_to_gateway(connectionId, json_data)
+                                    
+                                    # Buffer the partial match
+                                    buffer = suffix
+                                    found_partial = True
+                                    break
+                            
+                            if not found_partial:
+                                # No partial match, send as normal
+                                json_data = {
+                                    "type": "contentBlockDelta",
+                                    "data": contentBlockDelta
+                                }
+                                send_to_gateway(connectionId, json_data)
+                    else:
+                        # Buffer is not empty - try to complete the pattern
+                        combined = buffer + delta_text
+                        match_length = 0
+                        
+                        # Check character by character
+                        for i, char in enumerate(delta_text):
+                            if buffer + delta_text[:i+1] == BREAK_TOKEN[:len(buffer) + i + 1]:
+                                match_length = i + 1
+                                if buffer + delta_text[:i+1] == BREAK_TOKEN:
+                                    # Pattern complete!
+                                    # Send break token message
+                                    json_data = {
+                                        "type": "breakTokenType"
+                                    }
+                                    send_to_gateway(connectionId, json_data)
+                                    
+                                    # Clear buffer
+                                    buffer = ""
+                                    
+                                    # Send remaining delta if exists
+                                    remaining = delta_text[i+1:]
+                                    if remaining:
+                                        json_data = {
+                                            "type": "contentBlockDelta",
+                                            "data": {
+                                                **contentBlockDelta,
+                                                "delta": {
+                                                    **contentBlockDelta.get("delta", {}),
+                                                    "text": remaining
+                                                }
+                                            }
+                                        }
+                                        send_to_gateway(connectionId, json_data)
+                                    break
+                            else:
+                                # Mismatch - false start
+                                false_start_text = buffer + delta_text
+                                json_data = {
+                                    "type": "contentBlockDelta",
+                                    "data": {
+                                        **contentBlockDelta,
+                                        "delta": {
+                                            **contentBlockDelta.get("delta", {}),
+                                            "text": false_start_text
+                                        }
+                                    }
+                                }
+                                send_to_gateway(connectionId, json_data)
+                                
+                                # Clear buffer
+                                buffer = ""
+                                break
+                        else:
+                            # Exhausted delta while matching - continue buffering
+                            if match_length == len(delta_text):
+                                buffer += delta_text
+                                # Don't send anything, wait for next delta
                 
                 # Handle message start events
                 elif "messageStart" in event:
@@ -131,6 +268,21 @@ def parse_and_send_response(response, connectionId, classic=None, pure=None):
                 
                 # Handle message completion events
                 elif "messageStop" in event:
+                    # If there's buffered content at message end, send it as false start
+                    if buffer:
+                        logger.warning(f"Incomplete BREAK_TOKEN at message end: {buffer}")
+                        # Send buffered content as regular delta
+                        json_data = {
+                            "type": "contentBlockDelta",
+                            "data": {
+                                "delta": {
+                                    "text": buffer
+                                }
+                            }
+                        }
+                        send_to_gateway(connectionId, json_data)
+                        buffer = ""
+                    
                     json_data = {
                         "type": "messageStop",
                         "data": event["messageStop"]
@@ -142,7 +294,7 @@ def parse_and_send_response(response, connectionId, classic=None, pure=None):
                     logger.warning(f"Unhandled event type: {event}")
             
             logger.info(f"Processed {event_count} streaming events")
-        
+            
     except Exception as e:
         logger.error(f"Response parsing failed: {e}")
         logger.debug(f"Traceback: {traceback.format_exc()}")

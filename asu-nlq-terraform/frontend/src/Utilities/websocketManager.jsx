@@ -7,6 +7,8 @@ class WebSocketManager {
     this.isConnecting = false;
     this.messageCallback = null;
     this.currentMessage = ''; // Track the current streaming message
+    this.hasContent = false; // Track if current message has content for break token validation
+    this.shouldCreateNewMessage = false; // Track if next delta should create new message
   }
 
   // Connect to WebSocket
@@ -62,18 +64,54 @@ class WebSocketManager {
     if (data.type === 'messageStart') {
       // Reset current message for new message
       this.currentMessage = '';
+      this.hasContent = false;
+      this.shouldCreateNewMessage = false;
       console.log('Message start received');
     } 
     else if (data.type === 'contentBlockDelta') {
-      // Extract delta text and add to current message
+      // Simple delta processing - just accumulate text
       const deltaText = data.data.delta.text;
-      this.currentMessage += deltaText;
-
-      // Update the UI with the current accumulated message
-      if (this.messageCallback) {
-        this.messageCallback(this.currentMessage);
-      }
       
+      // Only process if deltaText has actual content
+      if (deltaText && deltaText.length > 0) {
+        this.currentMessage += deltaText;
+        this.hasContent = true;
+        
+        // Check if this should create a new message (after break token)
+        const isNewMessage = this.shouldCreateNewMessage;
+        
+        // Reset the flag after using it
+        if (this.shouldCreateNewMessage) {
+          this.shouldCreateNewMessage = false;
+        }
+        
+        // Update the UI with the current accumulated message
+        if (this.messageCallback) {
+          this.messageCallback(this.currentMessage, isNewMessage);
+        }
+      } else {
+        console.log('Empty delta text received, skipping update');
+      }
+    }
+    else if (data.type === 'breakTokenType') {
+      // Only process if we have content from previous contentBlockDelta
+      if (this.hasContent && this.currentMessage.length > 0) {
+        console.log('Break token received - finalizing current message and preparing for new one');
+        
+        // Finalize current message
+        if (this.messageCallback) {
+          this.messageCallback(this.currentMessage, false);
+        }
+        
+        // Reset for next message and flag that next delta should create new message
+        this.currentMessage = '';
+        this.hasContent = false;
+        this.shouldCreateNewMessage = true;
+        
+        // Next contentBlockDelta will create a new message
+      } else {
+        console.log('Break token ignored - no preceding content');
+      }
     }
     else if (data.type === 'messageStop') {
       // Message is complete, close connection
@@ -83,7 +121,7 @@ class WebSocketManager {
     else {
       // Handle legacy format or other message types
       if (data.message && this.messageCallback) {
-        this.messageCallback(data.message);
+        this.messageCallback(data.message, false);
         this.close(); // Close for non-streaming messages
       }
     }
@@ -122,6 +160,8 @@ class WebSocketManager {
     }
     // Reset current message state
     this.currentMessage = '';
+    this.hasContent = false;
+    this.shouldCreateNewMessage = false;
   }
 
   // Get connection status

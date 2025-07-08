@@ -35,6 +35,12 @@ def orchestrate(event):
     try:
         # Parse chat history
         chatHistory = json.loads(event["body"])["messages"]
+
+        # Ensure updated chat history to include "BREAK_TOKEN" for streaming responses to not screw up prompting
+        print("Chat history before fix:", chatHistory)  # Debugging line
+        chatHistory = fix_chat_history(chatHistory)
+        print("Chat history after fix:", chatHistory)  # Debugging line
+
         logger.info(f"Parsed {len(chatHistory)} messages")
         
         # Get database schema from S3
@@ -178,7 +184,6 @@ def respond_to_sql_query(chatHistory, schema, reasoning):
         final_response = get_final_response(
             chatHistory=chatHistory, 
             schema=schema, 
-            specific_question=specific_question, 
             results=results
         )
         
@@ -226,7 +231,7 @@ def create_question(message, chatHistory, schema, reasoning):
 
 
 # Retrieve final response based on SQL query results.
-def get_final_response(chatHistory, schema, specific_question, results):
+def get_final_response(chatHistory, schema, results):
     """
     Convert SQL query results into natural language response.
     Synthesizes data into conversational format that answers the user's question.
@@ -240,7 +245,7 @@ def get_final_response(chatHistory, schema, specific_question, results):
             get_id("final_response"),
             chatHistory,
             config=get_config("final_response"),
-            system=get_prompt("final_response", message=specific_question, schema=schema_json, results=results),
+            system=get_prompt("final_response", schema=schema_json, results=results),
             streaming=True
         )
         
@@ -267,4 +272,17 @@ def retrieve_answers_from_database(questions):
     except Exception as e:
         logger.error(f"Database retrieval failed: {e}")
         raise
+
+
+# Ensure chat history is updated to include "BREAK_TOKEN" for streaming responses.
+def fix_chat_history(chatHistory):
+    """
+    Ensure chat history is updated to include "BREAK_TOKEN" for streaming responses.
+    """
+    for message in chatHistory:
+        if message["role"] == "assistant":
+            current_text = message["content"][0]["text"]
+            if not current_text.endswith("BREAK_TOKEN"):
+                message["content"][0]["text"] = current_text + "BREAK_TOKEN"
+    return chatHistory
 
