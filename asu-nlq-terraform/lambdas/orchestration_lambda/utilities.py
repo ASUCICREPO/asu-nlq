@@ -120,7 +120,6 @@ def parse_and_send_response(response, connectionId, classic=None, pure=None):
                 if "contentBlockDelta" in event:
                     contentBlockDelta = event["contentBlockDelta"]
                     delta_text = contentBlockDelta.get("delta", {}).get("text", "")
-                    print(f"Processing contentBlockDelta: {delta_text}")
                     
                     # Process BREAK_TOKEN detection
                     if buffer == "":
@@ -365,8 +364,12 @@ def execute_knowledge_base_query(questions):
                 'text': specific_question
             }
             #Retrive from the Knowledge base
-            logger.info(f"Retrieving from knowledge base with query: {query}")
-            kb_results = agent.retrieve(knowledgeBaseId=knowledge_base_id, retrievalQuery=query)
+            print(f"Retrieving from knowledge base with query: {query["text"]}")
+            try:
+                kb_results = agent.retrieve(knowledgeBaseId=knowledge_base_id, retrievalQuery=query)
+            except Exception as e:
+                logger.error(f"Knowledge base retrieval failed: {e}")
+                kb_results = {'retrievalResults': [{"content": {"row": "An error occurred while retrieving from the knowledge base. Please have the user try again."}, "location": {"sqlLocation": {"query": "No query executed"}}}]}
             # get the results from the knowledge base
             results = str(kb_results['retrievalResults'][0]['content']['row'])
             query_value = kb_results['retrievalResults'][0]['location']['sqlLocation']['query']

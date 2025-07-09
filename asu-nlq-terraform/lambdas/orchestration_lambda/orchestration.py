@@ -37,9 +37,7 @@ def orchestrate(event):
         chatHistory = json.loads(event["body"])["messages"]
 
         # Ensure updated chat history to include "BREAK_TOKEN" for streaming responses to not screw up prompting
-        print("Chat history before fix:", chatHistory)  # Debugging line
         chatHistory = fix_chat_history(chatHistory)
-        print("Chat history after fix:", chatHistory)  # Debugging line
 
         logger.info(f"Parsed {len(chatHistory)} messages")
         
