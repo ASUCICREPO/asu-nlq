@@ -11,18 +11,6 @@
     "example": "Stores user account information and profile data",
     "optional": false
   },
-  "database_type": {
-    "datatype": "String",
-    "description": "Type of database management system",
-    "example": "MySQL",
-    "optional": true
-  },
-  "creation_date": {
-    "datatype": "String",
-    "description": "Date when table was created in YYYY-MM-DD format",
-    "example": "2024-01-15",
-    "optional": true
-  },
   "columns": {
     "datatype": "Array",
     "description": "List of column definitions for the table",
