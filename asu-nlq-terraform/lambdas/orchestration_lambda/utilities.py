@@ -4,6 +4,8 @@ import json
 import logging
 import traceback
 import constants  # This configures logging
+from TestingTimer import timer
+
 logger = logging.getLogger(__name__)
 
 
@@ -289,6 +291,12 @@ def parse_and_send_response(response, connectionId, classic=None, pure=None):
                     send_to_gateway(connectionId, json_data)
                 
                 # Log any unhandled event types
+                elif "contentBlockStop" in event:
+                    # skip
+                    continue
+                elif "metadata" in event:
+                    # skip
+                    continue
                 else:
                     logger.warning(f"Unhandled event type: {event}")
             
@@ -364,16 +372,20 @@ def execute_knowledge_base_query(questions):
                 'text': specific_question
             }
             #Retrive from the Knowledge base
-            print(f"Retrieving from knowledge base with query: {query["text"]}")
+            logger.info(f"Retrieving from knowledge base with query: {query["text"]}")
             try:
+                logger.timer(timer.checkpoint("A Knowledge base retrieval Started"))
+
                 kb_results = agent.retrieve(knowledgeBaseId=knowledge_base_id, retrievalQuery=query)
+
+                logger.timer(timer.checkpoint("A Knowledge base retrieval completed"))
             except Exception as e:
                 logger.error(f"Knowledge base retrieval failed: {e}")
                 kb_results = {'retrievalResults': [{"content": {"row": "An error occurred while retrieving from the knowledge base. Please have the user try again."}, "location": {"sqlLocation": {"query": "No query executed"}}}]}
             # get the results from the knowledge base
             results = str(kb_results['retrievalResults'][0]['content']['row'])
             query_value = kb_results['retrievalResults'][0]['location']['sqlLocation']['query']
-            print("Knowledge base retrieval query:", query_value) # Don't use logger as this should always be printed
+            logger.info("Knowledge base retrieval query:", query_value) # Don't use logger as this should always be printed
             results_array.append(results)
         except Exception as e:
             logger.error(f"Knowledge base retrieval failed: {e}")
@@ -398,4 +410,22 @@ def format_results_for_response(questions, results):
     except Exception as e:
         logger.error(f"Failed to format results: {e}")
         raise
+
+def extract_json_content(text):
+    """
+    Extracts content between the first '{' and last '}' in a string.
+    
+    Args:
+        text (str): Input string containing JSON-like content
+        
+    Returns:
+        str: Content between first '{' and last '}', or empty string if not found
+    """
+    first_brace = text.find('{')
+    last_brace = text.rfind('}')
+    
+    if first_brace != -1 and last_brace != -1 and first_brace <= last_brace:
+        return text[first_brace:last_brace + 1]
+    
+    return ""
     

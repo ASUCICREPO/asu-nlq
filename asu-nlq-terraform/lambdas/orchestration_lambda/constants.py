@@ -1,12 +1,27 @@
 import os
 import logging
+from TestingTimer import timer
+
 
 # ============================================================================
 # LOGGING CONFIGURATION
 # ============================================================================
 
+# Create custom TIMER level
+TIMER_LEVEL = 25  # Between INFO (20) and WARNING (30)
+logging.addLevelName(TIMER_LEVEL, 'TIMER')
+
+def timer(self, message, *args, **kwargs):
+    """Custom timer logging method"""
+    if self.isEnabledFor(TIMER_LEVEL):
+        self._log(TIMER_LEVEL, message, args, **kwargs)
+
+# Add the timer method to Logger class
+logging.Logger.timer = timer
+
 # Logging configuration - change LOG_LEVEL to control all modules
-LOG_LEVEL = logging.WARNING  # or logging.INFO, logging.WARNING, etc.
+# Use TIMER_LEVEL to show only timer messages, or logging.INFO, logging.WARNING, etc.
+LOG_LEVEL = TIMER_LEVEL  # Change this to TIMER_LEVEL for timer-only logs
 LOG_FORMAT = '%(asctime)s - %(levelname)s - %(name)s - %(message)s'
 
 def setup_logging():
@@ -19,7 +34,6 @@ def setup_logging():
 
 # Call setup when constants is imported
 setup_logging()
-
 
 # ============================================================================
 # DATABASE SCHEMA CONFIGURATION
@@ -44,4 +58,3 @@ if not DATABASE_DESCRIPTIONS_S3_NAME:
 KNOWLEDGE_BASE_ID = os.environ.get("KNOWLEDGE_BASE_ID")
 if not KNOWLEDGE_BASE_ID:
     raise ValueError("KNOWLEDGE_BASE_ID environment variable is required")
-

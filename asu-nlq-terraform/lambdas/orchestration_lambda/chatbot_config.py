@@ -7,6 +7,8 @@ from prompts import (
     error
 ) 
 import constants  # This configures logging
+from TestingTimer import timer
+
 logger = logging.getLogger(__name__)
 
 
@@ -18,13 +20,13 @@ logger = logging.getLogger(__name__)
 final_response_id = "us.amazon.nova-pro-v1:0"
 
 # Model ID for classification tasks
-classify_id = "us.amazon.nova-pro-v1:0"
+classify_id = "us.amazon.nova-micro-v1:0"
 
 # Model ID for NoSQL query handling
 no_sql_id = "us.amazon.nova-pro-v1:0"
 
 # Model ID for creating specific questions for SQL generation
-create_question_id = "us.amazon.nova-pro-v1:0"
+create_question_id = "us.amazon.nova-micro-v1:0"
 
 # Model ID for error handling (default case)
 error_id = "us.amazon.nova-pro-v1:0"

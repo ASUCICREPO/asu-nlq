@@ -5,6 +5,8 @@ import traceback
 import constants  # This configures logging
 from orchestration import orchestrate
 from botocore.exceptions import ClientError
+from TestingTimer import timer
+
 logger = logging.getLogger(__name__)
 
 
@@ -14,6 +16,8 @@ def lambda_handler(event, context):
     AWS Lambda handler for processing chatbot requests.
     Handles both synchronous responses and asynchronous background processing.
     """
+    timer.reset()  # Reset the timer for this execution
+    logger.timer(timer.checkpoint("Lambda handler started"))
     logger.info("Lambda handler started")
     
     try:
@@ -22,6 +26,8 @@ def lambda_handler(event, context):
             logger.info("Starting background processing")
             result = orchestrate(event)
             logger.info("Background processing completed")
+            logger.timer(timer.checkpoint("Lambda handler completed"))
+
             return {"statusCode": 200, "body": "Processing completed"}
         
         # Validate required fields for initial request
@@ -45,6 +51,8 @@ def lambda_handler(event, context):
         )
         
         logger.info(f"Async invocation initiated with status: {response['StatusCode']}")
+        logger.timer(timer.checkpoint("Lambda Async processing initiated"))
+
         return {"statusCode": 202, "body": "Processing initiated"}
         
     except ClientError as e:

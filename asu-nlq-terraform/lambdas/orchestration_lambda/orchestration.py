@@ -8,9 +8,12 @@ from utilities import (
     download_s3_json,
     create_history,
     execute_knowledge_base_query,
-    format_results_for_response
+    format_results_for_response,
+    extract_json_content
 )
 import constants  # This configures logging
+from TestingTimer import timer
+
 logger = logging.getLogger(__name__)
 
 
@@ -47,12 +50,15 @@ def orchestrate(event):
         
         # Classify the user's query
         classification_response = classify_query(chatHistory[-1], chatHistory, schema)
-        classification = json.loads(classification_response["output"]["message"]["content"][0]["text"])
+        classification = json.loads(extract_json_content(classification_response["output"]["message"]["content"][0]["text"]))
         logger.info(f"Query classified as: {classification['classification']}")
+        logger.timer(timer.checkpoint("Question Classification completed"))
+
         
         # Route to appropriate handler
         if classification["classification"] == "SQL_Query":
             response = respond_to_sql_query(chatHistory=chatHistory, schema=schema, reasoning=classification)
+            logger.timer(timer.checkpoint("Response streaming Started"))
             parse_and_send_response(response, connectionId)
             logger.info("SQL query processed successfully")
 
@@ -153,14 +159,15 @@ def respond_to_sql_query(chatHistory, schema, reasoning):
         # Stage 1: Create specific question
         logger.info("Creating specific question")
         response = create_question(message=chatHistory[-1], chatHistory=chatHistory, schema=schema, reasoning=reasoning)
-        specific_question_json = json.loads(response["output"]["message"]["content"][0]["text"])
+        specific_question_json = json.loads(extract_json_content(response["output"]["message"]["content"][0]["text"]))
+        logger.timer(timer.checkpoint("Specific Question Creation completed"))
 
         # Check if the improved question is present in the response
         if "improved_questions" not in specific_question_json:
             logger.error("Improved question not found in response")
             raise ValueError("Improved question missing from response")
         specific_question = specific_question_json["improved_questions"]
-        print(f"Specific question created: {specific_question}") # Don't use logger, this should always be printed to the console
+        logger.info(f"Specific question created: {specific_question}")
 
 
         # Stage 2: get answers from the database
@@ -168,6 +175,7 @@ def respond_to_sql_query(chatHistory, schema, reasoning):
         results = retrieve_answers_from_database(
             questions=specific_question, 
         )
+
         # Check if results are empty
         if not results:
             logger.warning("No results found for the specific question")
@@ -265,6 +273,7 @@ def retrieve_answers_from_database(questions):
     try:
         # Send question to the knowledge base
         results = execute_knowledge_base_query(questions)
+        logger.timer(timer.checkpoint("All Knowledge base retrieval completed"))
         logger.info("Database query executed successfully")
         return results
     except Exception as e:
