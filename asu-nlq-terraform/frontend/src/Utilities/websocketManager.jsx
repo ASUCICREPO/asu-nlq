@@ -6,6 +6,7 @@ class WebSocketManager {
     this.isConnected = false;
     this.isConnecting = false;
     this.messageCallback = null;
+    this.infoCallback = null; // NEW: For temporary info messages
     this.currentMessage = ''; // Track the current streaming message
     this.hasContent = false; // Track if current message has content for break token validation
     this.shouldCreateNewMessage = false; // Track if next delta should create new message
@@ -118,6 +119,14 @@ class WebSocketManager {
       console.log('Message stop received, final message:', this.currentMessage);
       this.close();
     }
+    else if (data.type === 'info') {
+      // Handle info messages (not streaming, just status updates)
+      if (this.infoCallback) {
+        // Handle both string and object formats
+        const infoMessage = data.data.message || data.data;
+        this.infoCallback(infoMessage);
+      }
+    }
     else {
       // Handle legacy format or other message types
       if (data.message && this.messageCallback) {
@@ -158,10 +167,11 @@ class WebSocketManager {
       this.ws.close();
       console.log('WebSocket connection closed manually');
     }
-    // Reset current message state
+    // Reset all state
     this.currentMessage = '';
     this.hasContent = false;
     this.shouldCreateNewMessage = false;
+    this.infoCallback = null; // Clear info callback
   }
 
   // Get connection status
@@ -172,9 +182,10 @@ class WebSocketManager {
   }
 
   // Complete send message workflow (connect -> send -> wait for response -> close on messageStop)
-  async sendMessageAndWaitForResponse(message, messages, onMessageReceived) {
+  async sendMessageAndWaitForResponse(message, messages, onMessageReceived, onInfoReceived = null) {
     try {
       this.messageCallback = onMessageReceived;
+      this.infoCallback = onInfoReceived;
       await this.connect();
       await this.sendMessage(message, messages);
       // Connection will be closed automatically when messageStop is received

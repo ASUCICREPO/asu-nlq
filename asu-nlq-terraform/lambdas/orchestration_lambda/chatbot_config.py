@@ -8,6 +8,7 @@ from prompts import (
 ) 
 import constants  # This configures logging
 from TestingTimer import timer
+import random
 
 logger = logging.getLogger(__name__)
 
@@ -20,13 +21,13 @@ logger = logging.getLogger(__name__)
 final_response_id = "us.amazon.nova-pro-v1:0"
 
 # Model ID for classification tasks
-classify_id = "us.amazon.nova-micro-v1:0"
+classify_id = "us.amazon.nova-pro-v1:0"
 
 # Model ID for NoSQL query handling
 no_sql_id = "us.amazon.nova-pro-v1:0"
 
 # Model ID for creating specific questions for SQL generation
-create_question_id = "us.amazon.nova-micro-v1:0"
+create_question_id = "us.amazon.nova-pro-v1:0"
 
 # Model ID for error handling (default case)
 error_id = "us.amazon.nova-pro-v1:0"
@@ -50,6 +51,54 @@ create_question_temperature = 0.1
 
 # Default temperature for unknown types
 default_temperature = 0.3
+
+# ============================================================================
+# INFO MESSAGES
+# ============================================================================
+
+# Dictionary to hold info messages for different interaction types
+info_messages = {
+    "message_received": [
+        "We've received your question . . .",
+        "Your message has been received . . .",
+        "Got it! Processing your request . . .",
+        "Message received . . .",
+        "Thanks for your question — we're on it . . ."
+    ],
+    
+    "classify": [
+        "We've classified your question . . .",
+        "Analyzing and categorizing your request . . .",
+        "Understanding the type of question you've asked . . .",
+        "Determining the best approach for your query . . .",
+        "Identifying how to handle your request . . ."
+    ],
+    
+    "create_question": [
+        "We're processing your question for better understanding . . .",
+        "Refining your question to get the best results . . .",
+        "Optimizing your query for our system . . .",
+        "Preparing your question for analysis . . .",
+        "Structuring your request for accurate processing . . ."
+    ],
+    
+    "querying_sql": [
+        "We're querying the database for your question (Up to 10 seconds) . . .",
+        "Searching our database for relevant information (Up to 10 seconds) . . .",
+        "Running database queries to find your answer (Up to 10 seconds) . . .",
+        "Retrieving data from our systems (Up to 10 seconds) . . .",
+        "Looking up information in our database (Up to 10 seconds) . . ."
+    ]
+}
+
+def get_random_message(message_type):
+    """
+    Returns a random message for the given message type.
+    """
+    if message_type not in info_messages:
+        raise KeyError(f"Message type '{message_type}' not found. Available types: {list(info_messages.keys())}")
+    
+    return random.choice(info_messages[message_type])
 
 
 # ============================================================================

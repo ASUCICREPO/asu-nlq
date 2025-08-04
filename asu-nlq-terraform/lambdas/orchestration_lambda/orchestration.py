@@ -1,7 +1,7 @@
 import json
 import logging
 import traceback
-from chatbot_config import get_prompt, get_config, get_id
+from chatbot_config import get_prompt, get_config, get_id, get_random_message
 from utilities import (
     converse_with_model,
     parse_and_send_response,    
@@ -35,6 +35,9 @@ def orchestrate(event):
         logger.error("Failed to extract connection ID")
         return None
     
+    # # Send initial info message to the client
+    # send_info_message(connectionId, get_random_message("message_received"))   // used for testing
+    
     try:
         # Parse chat history
         chatHistory = json.loads(event["body"])["messages"]
@@ -47,6 +50,9 @@ def orchestrate(event):
         # Get database schema from S3
         schema = download_s3_json()
         logger.info("Downloaded schema from S3")
+
+        # Send info message about query classification
+        send_info_message(connectionId, get_random_message("classify"))
         
         # Classify the user's query
         classification_response = classify_query(chatHistory[-1], chatHistory, schema)
@@ -57,7 +63,11 @@ def orchestrate(event):
         
         # Route to appropriate handler
         if classification["classification"] == "SQL_Query":
-            response = respond_to_sql_query(chatHistory=chatHistory, schema=schema, reasoning=classification)
+
+            # Send info message about creating the question
+            send_info_message(connectionId, get_random_message("create_question"))
+
+            response = respond_to_sql_query(chatHistory=chatHistory, schema=schema, reasoning=classification, connectionId=connectionId)
             logger.timer(timer.checkpoint("Response streaming Started"))
             parse_and_send_response(response, connectionId)
             logger.info("SQL query processed successfully")
@@ -145,7 +155,7 @@ def respond_to_nosql_query(chatHistory, schema, reasoning):
 
 
 # Respond to SQL queries by orchestrating a multi-stage pipeline.
-def respond_to_sql_query(chatHistory, schema, reasoning):
+def respond_to_sql_query(chatHistory, schema, reasoning, connectionId):
     """
     Handle SQL queries through multi-stage pipeline:
     1. Create specific question from user input
@@ -162,18 +172,21 @@ def respond_to_sql_query(chatHistory, schema, reasoning):
         specific_question_json = json.loads(extract_json_content(response["output"]["message"]["content"][0]["text"]))
         logger.timer(timer.checkpoint("Specific Question Creation completed"))
 
+        # Send info message about creating the question
+        send_info_message(connectionId, get_random_message("querying_sql"))
+
         # Check if the improved question is present in the response
-        if "improved_questions" not in specific_question_json:
+        if "improved_question" not in specific_question_json:
             logger.error("Improved question not found in response")
             raise ValueError("Improved question missing from response")
-        specific_question = specific_question_json["improved_questions"]
+        specific_question = specific_question_json["improved_question"]
         logger.info(f"Specific question created: {specific_question}")
 
 
         # Stage 2: get answers from the database
         logger.info("Retrieving answers from the database")
         results = retrieve_answers_from_database(
-            questions=specific_question, 
+            question=specific_question, 
         )
 
         # Check if results are empty
@@ -264,7 +277,7 @@ def get_final_response(chatHistory, schema, results):
 
 
 # Retrieve answers from the database based on the specific question.
-def retrieve_answers_from_database(questions):
+def retrieve_answers_from_database(question):
     """
     Retrieve answers from the database based on the specific question.
     This function executes the SQL queries and returns the results. - All inside bedrock knowledge bases
@@ -272,7 +285,7 @@ def retrieve_answers_from_database(questions):
     logger.info("Retrieving answers from the database")
     try:
         # Send question to the knowledge base
-        results = execute_knowledge_base_query(questions)
+        results = execute_knowledge_base_query(question)
         logger.timer(timer.checkpoint("All Knowledge base retrieval completed"))
         logger.info("Database query executed successfully")
         return results
@@ -292,4 +305,15 @@ def fix_chat_history(chatHistory):
             if not current_text.endswith("BREAK_TOKEN"):
                 message["content"][0]["text"] = current_text + "BREAK_TOKEN"
     return chatHistory
+
+
+# Send an info message to the client.
+def send_info_message(connectionId, message):
+    """
+    Send an info message to the client.
+    """
+    logger.info("Sending info message")
+    parse_and_send_response(message, connectionId, info=True)
+    return
+
 

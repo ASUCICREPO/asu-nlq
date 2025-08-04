@@ -9,6 +9,7 @@ import webSocketManager from '../Utilities/websocketManager';
 const ChatContainer = () => {
   const [messages, setMessages] = useState([]);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [currentInfoMessage, setCurrentInfoMessage] = useState(null); // NEW: For temporary info messages
   
   // Determine if we should show welcome screen or active chat
   const showWelcomeScreen = messages.length === 0;
@@ -28,6 +29,8 @@ const ChatContainer = () => {
 
     try {
       setIsStreaming(true);
+      setCurrentInfoMessage(null); // Clear any previous info message
+      
       // Add placeholder for assistant message that will be updated as it streams
       const assistantMessage = {
         role: "assistant",
@@ -42,6 +45,12 @@ const ChatContainer = () => {
 
       // Define callback for when bot message chunks are received
       const onBotMessageReceived = (botMessage, isNewMessage = false) => {
+        // Clear info message and stop streaming when actual response starts coming in
+        if (botMessage && botMessage.trim().length > 0) {
+          setCurrentInfoMessage(null);
+          setIsStreaming(false);
+        }
+        
         // Update messages based on whether this is a new message or updating existing
         setMessages(prevMessages => {
           if (isNewMessage) {
@@ -93,10 +102,17 @@ const ChatContainer = () => {
         });
       };
 
+      // Define callback for info messages
+      const onInfoReceived = (infoMessage) => {
+        setCurrentInfoMessage(infoMessage);
+      };
+
+      // Updated WebSocket call with info callback
       await webSocketManager.sendMessageAndWaitForResponse(
         message,
         newMessages,
-        onBotMessageReceived
+        onBotMessageReceived,
+        onInfoReceived
       );
     } catch (error) {
       console.error('Failed to send message:', error);
@@ -110,9 +126,10 @@ const ChatContainer = () => {
         return filteredMessages;
       });
       // TODO: Add error handling UI feedback
-    } finally {
-      setIsStreaming(false);
+      setIsStreaming(false); // Only set streaming false on error
+      setCurrentInfoMessage(null); // Clear info message on error
     }
+    // Remove the finally block entirely - streaming will be stopped when bot response starts
   };
 
   return (
@@ -168,7 +185,11 @@ const ChatContainer = () => {
             {showWelcomeScreen ? (
               <WelcomeScreen />
             ) : (
-              <ActiveChatView messages={messages} />
+              <ActiveChatView 
+                messages={messages} 
+                currentInfoMessage={currentInfoMessage}
+                isStreaming={isStreaming}
+              />
             )}
           </Box>
           

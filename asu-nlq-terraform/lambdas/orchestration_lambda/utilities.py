@@ -88,8 +88,11 @@ def converse_with_model(modelId, chatHistory, config=None, system=None, streamin
         raise
 
 
-# Function to parse streaming response and send events to client
-def parse_and_send_response(response, connectionId, classic=None, pure=None):
+# Function to parse streaming response and send events to client 
+# Classic is when the response is not streaming just one whole string message
+# Pure is when the response is a string and not a dict from the model
+# Info is an update for the frontend from before the final response is made (Info messages never stream, and are always sent as a single message)
+def parse_and_send_response(response, connectionId, classic=None, pure=None, info=None):
     """Parse streaming response and send events to client in real-time"""
     logger.info("Parsing and sending response")
     
@@ -98,6 +101,18 @@ def parse_and_send_response(response, connectionId, classic=None, pure=None):
     BREAK_TOKEN = "BREAK_TOKEN"
     
     try:
+
+        # Handle info messages
+        if info:
+            json_data = {
+                "type": "info",
+                "data": response
+            }
+            send_to_gateway(connectionId, json_data)
+            logger.info("Info message sent")
+            return
+
+        # Handle classic response (non-streaming)
         if classic:
             if pure:
                 json_data = {
@@ -362,35 +377,33 @@ def create_history(chatHistory):
 
 
 # Function to execute a knowledge base query using Bedrock Agent Runtime
-def execute_knowledge_base_query(questions):
-    results_array = []
-    for specific_question in questions:
+def execute_knowledge_base_query(question):
+    try:
+        # Set up the knowledge base ID and retrieval configuration
+        knowledge_base_id = constants.KNOWLEDGE_BASE_ID
+        query = {
+            'text': question
+        }
+        
+        # Retrieve from the Knowledge base
+        logger.info(f"Retrieving from knowledge base with query: {query['text']}")
         try:
-            # Set up the knowledge base ID and retrieval configuration
-            knowledge_base_id = constants.KNOWLEDGE_BASE_ID
-            query = {
-                'text': specific_question
-            }
-            #Retrive from the Knowledge base
-            logger.info(f"Retrieving from knowledge base with query: {query["text"]}")
-            try:
-                logger.timer(timer.checkpoint("A Knowledge base retrieval Started"))
-
-                kb_results = agent.retrieve(knowledgeBaseId=knowledge_base_id, retrievalQuery=query)
-
-                logger.timer(timer.checkpoint("A Knowledge base retrieval completed"))
-            except Exception as e:
-                logger.error(f"Knowledge base retrieval failed: {e}")
-                kb_results = {'retrievalResults': [{"content": {"row": "An error occurred while retrieving from the knowledge base. Please have the user try again."}, "location": {"sqlLocation": {"query": "No query executed"}}}]}
-            # get the results from the knowledge base
-            results = str(kb_results['retrievalResults'][0]['content']['row'])
-            query_value = kb_results['retrievalResults'][0]['location']['sqlLocation']['query']
-            logger.info("Knowledge base retrieval query:", query_value) # Don't use logger as this should always be printed
-            results_array.append(results)
+            logger.timer(timer.checkpoint("A Knowledge base retrieval Started"))
+            kb_results = agent.retrieve(knowledgeBaseId=knowledge_base_id, retrievalQuery=query)
         except Exception as e:
             logger.error(f"Knowledge base retrieval failed: {e}")
-            raise
-    return results_array
+            kb_results = {'retrievalResults': [{"content": {"row": "An error occurred while retrieving from the knowledge base. Please have the user try again."}, "location": {"sqlLocation": {"query": "No query executed"}}}]}
+        
+        # Get the results from the knowledge base
+        results = str(kb_results['retrievalResults'][0]['content']['row'])
+        query_value = kb_results['retrievalResults'][0]['location']['sqlLocation']['query']
+        logger.info("Knowledge base retrieval query:", query_value)
+        
+        return results
+        
+    except Exception as e:
+        logger.error(f"Knowledge base retrieval failed: {e}")
+        raise
 
 
 # A function that nicely formats the results for the final response, follows "Question asked was : Question" "The answer found was: Answer"

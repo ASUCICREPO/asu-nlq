@@ -20,24 +20,24 @@ module "backend" {
 
 }
 
-# zips the frontend files
-module "scripts" {
-  source = "./modules/scripts"
-  aws_region = var.aws_region
-  websocket_api_endpoint = module.backend.websocket_api_endpoint
+# # zips the frontend files
+# module "scripts" {
+#   source = "./modules/scripts"
+#   aws_region = var.aws_region
+#   websocket_api_endpoint = module.backend.websocket_api_endpoint
 
-  depends_on = [ module.backend ]
-}
+#   depends_on = [ module.backend ]
+# }
 
-# Creates the frontend of the app
-module "frontend" {
-  source     = "./modules/frontend"
-  aws_region = var.aws_region
-  random_suffix = random_id.random_suffix.hex
-  frontend_build_zip_path = module.scripts.frontend_build_zip_path
+# # Creates the frontend of the app
+# module "frontend" {
+#   source     = "./modules/frontend"
+#   aws_region = var.aws_region
+#   random_suffix = random_id.random_suffix.hex
+#   frontend_build_zip_path = module.scripts.frontend_build_zip_path
 
-  depends_on = [ module.scripts ]
+#   depends_on = [ module.scripts ]
 
-}
+# }
 
 
