@@ -9,7 +9,7 @@ from constants import (
     CFN_SUCCESS, CFN_FAILED, RESPONSE_MESSAGES, AMPLIFY_APP_NAME,
     FRONTEND_BUCKET_NAME, FRONTEND_FOLDER_NAME, AMPLIFY_APP_CONFIG,
     AMPLIFY_CUSTOM_RULES, AMPLIFY_BRANCH_CONFIG, AMPLIFY_DEPLOYMENT_CONFIG,
-    DEFAULT_ZIP_FILE, S3_DELETE_BATCH_SIZE
+    DEFAULT_ZIP_FILE, S3_DELETE_BATCH_SIZE, APP_ID_FILE_NAME, APP_ID_FILE_KEY
 )
 
 logger = logging.getLogger(__name__)
@@ -62,6 +62,15 @@ def handle_create_request(event, context):
         app_id = app_creation_response['app_id']
         branch_name = app_creation_response['branch_name']
         
+        # Stage 2.5: Save app ID to S3 for future reference
+        logger.info("Saving app ID to S3")
+        save_response = save_app_id_to_s3(app_id)
+        if not save_response['success']:
+            logger.error("Failed to save app ID to S3")
+            send_cfn_response(event, context, CFN_SUCCESS, 
+                            {"Message": RESPONSE_MESSAGES["APP_ID_SAVE_ERROR"]})
+            return
+        
         # Stage 3: Start deployment
         logger.info("Starting Amplify deployment")
         deployment_response = deploy_to_amplify(app_id, branch_name)
@@ -104,13 +113,13 @@ def handle_update_request(event, context):
                             {"Message": RESPONSE_MESSAGES["ZIP_EXTRACTION_ERROR"]})
             return
         
-        # Stage 2: Get existing app ID
-        logger.info("Retrieving existing Amplify app ID")
-        app_id = get_app_id_by_name(AMPLIFY_APP_NAME)
+        # Stage 2: Get existing app ID from S3
+        logger.info("Retrieving existing Amplify app ID from S3")
+        app_id = retrieve_app_id_from_s3()
         if not app_id:
-            logger.error("Cannot find existing Amplify app for update")
+            logger.error("Cannot find existing Amplify app ID in S3")
             send_cfn_response(event, context, CFN_SUCCESS, 
-                            {"Message": RESPONSE_MESSAGES["APP_ID_NOT_FOUND"]})
+                            {"Message": RESPONSE_MESSAGES["APP_ID_FILE_NOT_FOUND"]})
             return
         
         # Stage 3: Start deployment to existing app
@@ -144,13 +153,13 @@ def handle_delete_request(event, context):
     logger.info("Starting Delete request handling")
     
     try:
-        # Get app ID for deletion
-        logger.info("Retrieving Amplify app ID for deletion")
-        app_id = get_app_id_by_name(AMPLIFY_APP_NAME)
+        # Get app ID from S3
+        logger.info("Retrieving Amplify app ID from S3 for deletion")
+        app_id = retrieve_app_id_from_s3()
         if not app_id:
-            logger.warning("Amplify app not found for deletion")
+            logger.warning("Amplify app ID not found in S3")
             send_cfn_response(event, context, CFN_SUCCESS, 
-                            {"Message": RESPONSE_MESSAGES["APP_ID_NOT_FOUND"]})
+                            {"Message": RESPONSE_MESSAGES["APP_ID_FILE_NOT_FOUND"]})
             return
         
         # Delete the Amplify app
@@ -158,6 +167,12 @@ def handle_delete_request(event, context):
         deletion_response = delete_amplify_app(app_id)
         if not deletion_response['success']:
             logger.error(f"App deletion failed: {deletion_response['message']}")
+        
+        # Clean up app ID file from S3
+        logger.info("Cleaning up app ID file from S3")
+        cleanup_response = delete_app_id_file_from_s3()
+        if not cleanup_response['success']:
+            logger.warning(f"App ID file cleanup failed: {cleanup_response['message']}")
         
         logger.info("Delete request completed successfully")
         send_cfn_response(event, context, CFN_SUCCESS, 
@@ -285,50 +300,92 @@ def delete_amplify_app(app_id):
         return {"success": False, "message": error_msg}
 
 
-def get_app_id_by_name(name):
+def save_app_id_to_s3(app_id):
     """
-    Retrieve Amplify app ID by app name with pagination support.
+    Save Amplify app ID to S3 for future reference.
     
-    Searches through all Amplify apps to find matching name.
+    Stores the app ID in a text file in the frontend S3 bucket
+    for retrieval during update and delete operations.
     
     Args:
-        name (str): The name of the Amplify app to search for
+        app_id (str): Amplify application ID to save
         
+    Returns:
+        dict: Response with success status and message
+    """
+    logger.info(f"Saving app ID {app_id} to S3")
+    
+    try:
+        s3_client.put_object(
+            Bucket=FRONTEND_BUCKET_NAME,
+            Key=APP_ID_FILE_KEY,
+            Body=app_id.encode('utf-8'),
+            ContentType='text/plain'
+        )
+        
+        logger.info(f"App ID saved successfully to s3://{FRONTEND_BUCKET_NAME}/{APP_ID_FILE_KEY}")
+        return {"success": True, "message": "App ID saved to S3 successfully"}
+        
+    except Exception as e:
+        error_msg = f"Error saving app ID to S3: {str(e)}"
+        logger.error(error_msg)
+        return {"success": False, "message": error_msg}
+
+
+def retrieve_app_id_from_s3():
+    """
+    Retrieve Amplify app ID from S3.
+    
+    Reads the app ID from the stored text file in the frontend S3 bucket.
+    
     Returns:
         str: The app ID if found, None otherwise
     """
-    logger.info(f"Searching for Amplify app with name: {name}")
+    logger.info(f"Retrieving app ID from S3: s3://{FRONTEND_BUCKET_NAME}/{APP_ID_FILE_KEY}")
     
     try:
-        next_token = None
+        response = s3_client.get_object(
+            Bucket=FRONTEND_BUCKET_NAME,
+            Key=APP_ID_FILE_KEY
+        )
         
-        while True:
-            # Prepare parameters for list_apps call
-            params = {}
-            if next_token:
-                params['nextToken'] = next_token
-            
-            # List apps with pagination support
-            response = amplify.list_apps(**params)
-            
-            # Search for app with matching name
-            for app in response.get('apps', []):
-                if app.get('name') == name:
-                    app_id = app['appId']
-                    logger.info(f"Found Amplify app '{name}' with ID: {app_id}")
-                    return app_id
-            
-            # Check if there are more pages
-            next_token = response.get('nextToken')
-            if not next_token:
-                break
-                
-        logger.warning(f"Amplify app with name '{name}' not found")
+        app_id = response['Body'].read().decode('utf-8').strip()
+        logger.info(f"Successfully retrieved app ID: {app_id}")
+        return app_id
+        
+    except s3_client.exceptions.NoSuchKey:
+        logger.warning(f"App ID file not found at s3://{FRONTEND_BUCKET_NAME}/{APP_ID_FILE_KEY}")
         return None
+    except Exception as e:
+        logger.error(f"Error retrieving app ID from S3: {str(e)}")
+        return None
+
+
+def delete_app_id_file_from_s3():
+    """
+    Delete the app ID file from S3 during cleanup.
+    
+    Removes the app ID file from the frontend S3 bucket
+    after successful app deletion.
+    
+    Returns:
+        dict: Response with success status and message
+    """
+    logger.info(f"Deleting app ID file from S3: s3://{FRONTEND_BUCKET_NAME}/{APP_ID_FILE_KEY}")
+    
+    try:
+        s3_client.delete_object(
+            Bucket=FRONTEND_BUCKET_NAME,
+            Key=APP_ID_FILE_KEY
+        )
+        
+        logger.info("App ID file deleted successfully from S3")
+        return {"success": True, "message": "App ID file deleted from S3 successfully"}
         
     except Exception as e:
-        logger.error(f"Error retrieving app ID for '{name}': {str(e)}")
-        return None
+        error_msg = f"Error deleting app ID file from S3: {str(e)}"
+        logger.error(error_msg)
+        return {"success": False, "message": error_msg}
 
 
 def extract_and_deploy_s3_zip(bucket_name, zip_key):

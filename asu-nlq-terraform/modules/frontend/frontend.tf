@@ -141,14 +141,15 @@ resource "aws_iam_role_policy" "asu_nlq_chatbot_lambda_amplify_access" {
         Action = [
           "amplify:CreateApp",
           "amplify:UpdateApp",
-          "amplify:CreateBranch",
+          "amplify:CreateBranch", 
           "amplify:UpdateBranch",
           "amplify:GetApp",
           "amplify:GetBranch",
           "amplify:ListApps",
-          "amplify:ListBranches",
+          "amplify:ListBranches", 
           "amplify:StartDeployment",
-          
+          "amplify:DeleteApp",        # Add this
+          "amplify:DeleteBranch"      # Add this for completeness
         ]
         Resource = "*"
       }

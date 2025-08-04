@@ -39,7 +39,10 @@ RESPONSE_MESSAGES = {
     "GENERIC_SUCCESS": "operation completed successfully",
     "ENV_VAR_MISSING": "Required environment variable is not set",
     "APP_ID_NOT_FOUND": "No appId available, cannot proceed with operation",
-    "ZIP_EXTRACTION_ERROR": "Error extracting zip file from S3 bucket"
+    "ZIP_EXTRACTION_ERROR": "Error extracting zip file from S3 bucket",
+    "APP_ID_SAVE_ERROR": "Error saving app ID to S3",
+    "APP_ID_RETRIEVE_ERROR": "Error retrieving app ID from S3",
+    "APP_ID_FILE_NOT_FOUND": "App ID file not found in S3"
 }
 
 # ============================================================================
@@ -108,3 +111,7 @@ DEFAULT_ZIP_FILE = "build.zip"
 
 # S3 batch delete limit (AWS maximum)
 S3_DELETE_BATCH_SIZE = 1000
+
+# App ID storage configuration
+APP_ID_FILE_NAME = "amplify-app-id.txt"
+APP_ID_FILE_KEY = f"{FRONTEND_FOLDER_NAME.rstrip('/')}/{APP_ID_FILE_NAME}"

@@ -6,4 +6,3 @@
 /asu-nlq-terraform/.terraform.tfstate.lock.info
 /asu-nlq-terraform/lambdas/zips/*
 /asu-nlq-terraform/frontend/node_modules
-asu-nlq-terraform/S3/*

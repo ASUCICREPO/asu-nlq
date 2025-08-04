@@ -65,6 +65,8 @@ def lambda_handler(event, context):
             logger.warning(f"Received unknown request type: {request_type}")
             success_message = f"{request_type} {RESPONSE_MESSAGES['GENERIC_SUCCESS']}"
             send_cfn_response(event, context, CFN_SUCCESS, {"Message": success_message})
+
+    
     
     except KeyError as e:
         # Handle missing required fields in event
