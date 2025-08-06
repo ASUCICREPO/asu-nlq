@@ -6,7 +6,8 @@ class WebSocketManager {
     this.isConnected = false;
     this.isConnecting = false;
     this.messageCallback = null;
-    this.infoCallback = null; // NEW: For temporary info messages
+    this.infoCallback = null; // For temporary info messages
+    this.completionCallback = null; // NEW: For when message is complete
     this.currentMessage = ''; // Track the current streaming message
     this.hasContent = false; // Track if current message has content for break token validation
     this.shouldCreateNewMessage = false; // Track if next delta should create new message
@@ -115,8 +116,14 @@ class WebSocketManager {
       }
     }
     else if (data.type === 'messageStop') {
-      // Message is complete, close connection
+      // Message is complete, notify completion callback before closing
       console.log('Message stop received, final message:', this.currentMessage);
+      
+      // NEW: Notify that message is complete before closing
+      if (this.completionCallback) {
+        this.completionCallback();
+      }
+      
       this.close();
     }
     else if (data.type === 'info') {
@@ -131,6 +138,10 @@ class WebSocketManager {
       // Handle legacy format or other message types
       if (data.message && this.messageCallback) {
         this.messageCallback(data.message, false);
+        // For legacy messages, also call completion callback
+        if (this.completionCallback) {
+          this.completionCallback();
+        }
         this.close(); // Close for non-streaming messages
       }
     }
@@ -172,6 +183,7 @@ class WebSocketManager {
     this.hasContent = false;
     this.shouldCreateNewMessage = false;
     this.infoCallback = null; // Clear info callback
+    this.completionCallback = null; // NEW: Clear completion callback
   }
 
   // Get connection status
@@ -182,10 +194,11 @@ class WebSocketManager {
   }
 
   // Complete send message workflow (connect -> send -> wait for response -> close on messageStop)
-  async sendMessageAndWaitForResponse(message, messages, onMessageReceived, onInfoReceived = null) {
+  async sendMessageAndWaitForResponse(message, messages, onMessageReceived, onInfoReceived = null, onMessageComplete = null) {
     try {
       this.messageCallback = onMessageReceived;
       this.infoCallback = onInfoReceived;
+      this.completionCallback = onMessageComplete; // NEW: Store completion callback
       await this.connect();
       await this.sendMessage(message, messages);
       // Connection will be closed automatically when messageStop is received

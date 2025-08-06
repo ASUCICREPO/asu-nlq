@@ -9,7 +9,8 @@ import webSocketManager from '../Utilities/websocketManager';
 const ChatContainer = () => {
   const [messages, setMessages] = useState([]);
   const [isStreaming, setIsStreaming] = useState(false);
-  const [currentInfoMessage, setCurrentInfoMessage] = useState(null); // NEW: For temporary info messages
+  const [isInputDisabled, setIsInputDisabled] = useState(false); // Separate state for input control
+  const [currentInfoMessage, setCurrentInfoMessage] = useState(null);
   
   // Determine if we should show welcome screen or active chat
   const showWelcomeScreen = messages.length === 0;
@@ -29,6 +30,7 @@ const ChatContainer = () => {
 
     try {
       setIsStreaming(true);
+      setIsInputDisabled(true); // Disable input until response is complete
       setCurrentInfoMessage(null); // Clear any previous info message
       
       // Add placeholder for assistant message that will be updated as it streams
@@ -45,7 +47,7 @@ const ChatContainer = () => {
 
       // Define callback for when bot message chunks are received
       const onBotMessageReceived = (botMessage, isNewMessage = false) => {
-        // Clear info message and stop streaming when actual response starts coming in
+        // Clear info message when actual response starts coming in (but don't re-enable input yet)
         if (botMessage && botMessage.trim().length > 0) {
           setCurrentInfoMessage(null);
           setIsStreaming(false);
@@ -107,12 +109,19 @@ const ChatContainer = () => {
         setCurrentInfoMessage(infoMessage);
       };
 
-      // Updated WebSocket call with info callback
+      // Define callback for when message is complete
+      const onMessageComplete = () => {
+        console.log('Message fully received, re-enabling input');
+        setIsInputDisabled(false); // Re-enable input only when message is complete
+      };
+
+      // WebSocket call with all callbacks
       await webSocketManager.sendMessageAndWaitForResponse(
         message,
         newMessages,
         onBotMessageReceived,
-        onInfoReceived
+        onInfoReceived,
+        onMessageComplete
       );
     } catch (error) {
       console.error('Failed to send message:', error);
@@ -125,11 +134,11 @@ const ChatContainer = () => {
         }
         return filteredMessages;
       });
-      // TODO: Add error handling UI feedback
-      setIsStreaming(false); // Only set streaming false on error
-      setCurrentInfoMessage(null); // Clear info message on error
+      // Re-enable input on error
+      setIsStreaming(false);
+      setIsInputDisabled(false); // Re-enable input on error
+      setCurrentInfoMessage(null);
     }
-    // Remove the finally block entirely - streaming will be stopped when bot response starts
   };
 
   return (
@@ -196,8 +205,8 @@ const ChatContainer = () => {
           {/* Input Section - Always visible */}
           <MessageInput 
             onSendMessage={handleSendMessage} 
-            disabled={isStreaming} 
-            isResponding={isStreaming}
+            disabled={isInputDisabled}
+            isResponding={isStreaming}        
           />
         </Paper>
       </Box>

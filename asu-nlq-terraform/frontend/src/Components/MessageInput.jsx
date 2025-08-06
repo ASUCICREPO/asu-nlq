@@ -2,17 +2,17 @@ import React, { useState } from 'react';
 import { Box, TextField, IconButton, InputAdornment } from '@mui/material';
 import { Send, Refresh } from '@mui/icons-material';
 
-const MessageInput = ({ onSendMessage, disabled = false }) => {
+const MessageInput = ({ onSendMessage, disabled = false, infoMessage = null, isResponding = false }) => {
   const [inputText, setInputText] = useState('');
   const [isDisabled, setIsDisabled] = useState(false);
-
+  
   const handleSend = async () => {
     const message = inputText.trim();
     if (!message || disabled) return;
-
+    
     setIsDisabled(true);
     setInputText('');
-
+    
     try {
       await onSendMessage(message);
     } catch (error) {
@@ -39,6 +39,17 @@ const MessageInput = ({ onSendMessage, disabled = false }) => {
   };
 
   const isInputDisabled = isDisabled || disabled;
+  
+  // NEW: Determine placeholder text based on different states
+  const getPlaceholderText = () => {
+    if (infoMessage) {
+      return infoMessage; // Show info message if available
+    }
+    if (disabled) {
+      return "Waiting for response..."; // Show when input is disabled but no specific info
+    }
+    return "Type your question here..."; // Default placeholder
+  };
 
   return (
     <Box
@@ -74,7 +85,7 @@ const MessageInput = ({ onSendMessage, disabled = false }) => {
         multiline
         maxRows={4}
         variant="outlined"
-        placeholder={disabled ? "Waiting for response..." : "Type your question here..."}
+        placeholder={getPlaceholderText()} // NEW: Use dynamic placeholder
         value={inputText}
         onChange={handleInputChange}
         onKeyDown={handleKeyDown}
