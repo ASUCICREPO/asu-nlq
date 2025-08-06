@@ -176,10 +176,14 @@ def respond_to_sql_query(chatHistory, schema, reasoning, connectionId):
         send_info_message(connectionId, get_random_message("querying_sql"))
 
         # Check if the improved question is present in the response
-        if "improved_question" not in specific_question_json:
+        if "improved_questions" not in specific_question_json:
             logger.error("Improved question not found in response")
             raise ValueError("Improved question missing from response")
-        specific_question = specific_question_json["improved_question"]
+        logger.custom(" list of questions created: " + str(specific_question_json["improved_questions"]))
+
+        specific_question = specific_question_json["improved_questions"][0]  
+        unanswered_questions = get_unanswered_questions(specific_question_json)
+        
         logger.info(f"Specific question created: {specific_question}")
 
 
@@ -189,6 +193,7 @@ def respond_to_sql_query(chatHistory, schema, reasoning, connectionId):
             question=specific_question, 
         )
 
+
         # Check if results are empty
         if not results:
             logger.warning("No results found for the specific question")
@@ -197,13 +202,16 @@ def respond_to_sql_query(chatHistory, schema, reasoning, connectionId):
         # Format results for response
         results = format_results_for_response(specific_question, results)
 
+        logger.custom(" list of results: " + str(results))
+
 
         # Stage 3: Generate final response
         logger.info("Generating final response")
         final_response = get_final_response(
             chatHistory=chatHistory, 
             schema=schema, 
-            results=results
+            results=results,
+            unanswered_questions=unanswered_questions
         )
         
         logger.info("SQL pipeline completed")
@@ -250,7 +258,7 @@ def create_question(message, chatHistory, schema, reasoning):
 
 
 # Retrieve final response based on SQL query results.
-def get_final_response(chatHistory, schema, results):
+def get_final_response(chatHistory, schema, results, unanswered_questions="None"):
     """
     Convert SQL query results into natural language response.
     Synthesizes data into conversational format that answers the user's question.
@@ -264,7 +272,7 @@ def get_final_response(chatHistory, schema, results):
             get_id("final_response"),
             chatHistory,
             config=get_config("final_response"),
-            system=get_prompt("final_response", schema=schema_json, results=results),
+            system=get_prompt("final_response", schema=schema_json, results=results, unanswered_questions=unanswered_questions),
             streaming=True
         )
         
@@ -315,5 +323,17 @@ def send_info_message(connectionId, message):
     logger.info("Sending info message")
     parse_and_send_response(message, connectionId, info=True)
     return
+
+def get_unanswered_questions(specific_question_json):
+   questions = specific_question_json["improved_questions"][1:] if len(specific_question_json["improved_questions"]) > 1 else None
+   
+   if questions is None:
+       return "None"
+   
+   result = "The questions that weren't answered, but still need to be:\n"
+   for i, question in enumerate(questions, 1):
+       result += f"{i}. {question}\n"
+   
+   return result.rstrip()  # Remove trailing newline
 
 

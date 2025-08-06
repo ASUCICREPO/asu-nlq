@@ -106,7 +106,7 @@ def get_random_message(message_type):
 # ============================================================================
 
 # This function retrieves the appropriate prompt based on the type of interaction.
-def get_prompt(type, message=None, schema=None, chatHistory=None, reasoning=None, attributes=None, results=None):
+def get_prompt(type, message=None, schema=None, chatHistory=None, reasoning=None, attributes=None, results=None, unanswered_questions=None):
     """
     Returns the appropriate prompt based on the specified type.
     Formats prompts with provided parameters for AI model consumption.
@@ -117,7 +117,7 @@ def get_prompt(type, message=None, schema=None, chatHistory=None, reasoning=None
         prompt = ""
         match type:
             case "final_response":
-                prompt = final_response.final_response_prompt.format(results=results, schema=schema)
+                prompt = final_response.final_response_prompt.format(results=results, schema=schema, unanswered_questions=unanswered_questions)
             case "classify":
                 prompt = classify.classify_prompt.format(message=message, schema=schema, chatHistory=chatHistory)
             case "no_sql":

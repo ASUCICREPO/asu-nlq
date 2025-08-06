@@ -397,6 +397,8 @@ def execute_knowledge_base_query(question):
         # Get the results from the knowledge base
         results = str(kb_results['retrievalResults'][0]['content']['row'])
         query_value = kb_results['retrievalResults'][0]['location']['sqlLocation']['query']
+        logger.custom(" Query used: " + query_value)
+
         logger.info("Knowledge base retrieval query:", query_value)
         
         return results
@@ -406,20 +408,14 @@ def execute_knowledge_base_query(question):
         raise
 
 
-# A function that nicely formats the results for the final response, follows "Question asked was : Question" "The answer found was: Answer"
-def format_results_for_response(questions, results):
-    """Format results for final response"""
+def format_results_for_response(question, result):
+    """Format a single question-result pair for final response"""
     logger.info("Formatting results for final response")
-    
     try:
-        formatted_results = []
-        for question, result in zip(questions, results):
-            formatted_results.append(f"Question asked was: {question}\nThe answer found was: {result}")
-        
-        final_response = "\n\n".join(formatted_results)
+        # Format the single question-result pair
+        final_response = f"Question asked was: {question}\nThe answer found was: {result}"
         logger.info("Results formatted successfully")
         return final_response
-        
     except Exception as e:
         logger.error(f"Failed to format results: {e}")
         raise

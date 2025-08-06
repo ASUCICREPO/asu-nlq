@@ -1,27 +1,35 @@
 import os
 import logging
-from TestingTimer import timer
-
 
 # ============================================================================
 # LOGGING CONFIGURATION
 # ============================================================================
 
-# Create custom TIMER level
+# Create custom logging levels
 TIMER_LEVEL = 25  # Between INFO (20) and WARNING (30)
+CUSTOM_LEVEL = 35  # Between WARNING (30) and ERROR (40)
+
+# Add level names
 logging.addLevelName(TIMER_LEVEL, 'TIMER')
+logging.addLevelName(CUSTOM_LEVEL, 'CUSTOM')
 
 def timer(self, message, *args, **kwargs):
     """Custom timer logging method"""
     if self.isEnabledFor(TIMER_LEVEL):
         self._log(TIMER_LEVEL, message, args, **kwargs)
 
-# Add the timer method to Logger class
+def custom(self, message, *args, **kwargs):
+    """Custom logging method for your new level"""
+    if self.isEnabledFor(CUSTOM_LEVEL):
+        self._log(CUSTOM_LEVEL, message, args, **kwargs)
+
+# Add the custom methods to Logger class
 logging.Logger.timer = timer
+logging.Logger.custom = custom
 
 # Logging configuration - change LOG_LEVEL to control all modules
-# Use TIMER_LEVEL to show only timer messages, or logging.INFO, logging.WARNING, etc.
-LOG_LEVEL = TIMER_LEVEL  # Change this to TIMER_LEVEL for timer-only logs
+# Available levels: TIMER_LEVEL, CUSTOM_LEVEL, logging.INFO, logging.WARNING, etc.
+LOG_LEVEL = TIMER_LEVEL  # Change this to control what gets logged
 LOG_FORMAT = '%(asctime)s - %(levelname)s - %(name)s - %(message)s'
 
 def setup_logging():
