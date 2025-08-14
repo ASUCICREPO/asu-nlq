@@ -98,6 +98,15 @@ class SchemaManager:
                     print(f"    Data Type: {column['data_type']}")
                     print(f"    Possible Values: None specified")
     
+    def _handle_create_mode(self):
+        """Handle creating new schema file."""
+        if self.target_file.exists():
+            raise FileExistsError("Schema file already exists. Use --edit to modify existing file.")
+        
+        print("Creating new schema file...")
+        # Ensure target directory exists
+        self.target_file.parent.mkdir(parents=True, exist_ok=True)
+    
         """Handle creating new schema file."""
         if self.target_file.exists():
             raise FileExistsError("Schema file already exists. Use --edit to modify existing file.")
