@@ -88,7 +88,10 @@ class SchemaManager:
             print("\nColumns:")
             
             for column in table['columns']:
-                print(f"\n  - {column['column_name']}: {column['description']}")
+                description = column['description']
+                if len(description) > 200:
+                    description = description[:197] + "..."
+                print(f"\n  - {column['column_name']}: {description}")
             
             print("\n" + "-"*60)
     
