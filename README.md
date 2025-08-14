@@ -1,528 +1,341 @@
-# ASU NLQ Project
+# ASU NLQ Deployment Guide
 
 ## Table of Contents
 - [Introduction](#introduction)
 - [Prerequisites](#prerequisites)
-- [AWS Console Setup](#aws-console-setup)
-  - [Configure Bedrock Model Access](#configure-bedrock-model-access)
-  - [Create S3 Bucket for Knowledge Base](#create-s3-bucket-for-knowledge-base)
-  - [Configure IAM User for Terraform](#configure-iam-user-for-terraform)
-- [Terraform Configuration](#terraform-configuration)
-  - [Configure Terraform Variables](#configure-terraform-variables)
-  - [Initialize Terraform](#initialize-terraform)
-  - [Plan Deployment](#plan-deployment)
+- [EC2 Instance Setup](#ec2-instance-setup)
+  - [Create EC2 Instance](#create-ec2-instance)
+  - [Install Required Packages](#install-required-packages)
+  - [Clone Repository](#clone-repository)
+- [Data Dictionary Configuration](#data-dictionary-configuration)
+  - [Setup Process](#setup-process)
+- [Redshift Database Setup](#redshift-database-setup)
+  - [Create Redshift Serverless](#create-redshift-serverless)
+  - [Load Data into Redshift](#load-data-into-redshift)
+- [Knowledge Base Configuration](#knowledge-base-configuration)
+  - [General Setup](#general-setup)
+  - [Add Data Dictionary](#add-data-dictionary)
+  - [Grant Permissions](#grant-permissions)
+- [Terraform Deployment](#terraform-deployment)
   - [Deploy Infrastructure](#deploy-infrastructure)
-- [Knowledge Base Setup](#knowledge-base-setup)
-  - [Upload Documents](#upload-documents)
-  - [Sync Knowledge Base](#sync-knowledge-base)
-- [Application Configuration](#application-configuration)
-  - [Update Environment Variables](#update-environment-variables)
-  - [Deploy Application](#deploy-application)
-- [Testing and Validation](#testing-and-validation)
-  - [Verify Knowledge Base](#verify-knowledge-base)
-  - [Test Application](#test-application)
-- [Maintenance](#maintenance)
-  - [Update Documents](#update-documents)
-  - [Monitor Performance](#monitor-performance)
-  - [Destroy Infrastructure](#destroy-infrastructure)
+  - [Access Deployed Application](#access-deployed-application)
+- [Stack Management](#stack-management)
+  - [How to Delete the Stack](#how-to-delete-the-stack)
+  - [How to Update Data Dictionary](#how-to-update-data-dictionary)
 
 ## Introduction
-The ASU NLQ (Natural Language Query) Project is an intelligent question-answering system developed for the Cloud Innovation Center (CIC), a collaborative partnership between AWS and Arizona State University. This application leverages AWS Bedrock's knowledge base capabilities to provide accurate, context-aware responses to natural language queries by converting them into SQL queries against structured data.
 
-The system employs advanced AI technology to process natural language questions and translate them into SQL queries that can be executed against a Redshift database. Using AWS services and generative AI models, it creates a comprehensive data querying interface that understands complex natural language and generates appropriate SQL statements.
+The ASU NLQ (Natural Language Query) application is a sophisticated data querying system that enables users to interact with structured databases using natural language queries. This deployment guide provides step-by-step instructions for setting up the complete infrastructure on AWS.
 
-Key technical features include:
-- **Terraform Infrastructure as Code** for reproducible deployments
-- **AWS Bedrock Knowledge Base** for document processing and retrieval
-- **Amazon Redshift Serverless** for SQL-based data storage and querying
-- **AWS Nova Pro models** for advanced AI processing and natural language understanding
-- **AWS Lambda** functions for serverless processing
-- **Amazon S3** for document storage and management
+Key technical components include:
+- EC2 instance for deployment management
+- Amazon Redshift Serverless for data warehousing
+- AWS Bedrock Knowledge Base for natural language processing
+- Terraform for infrastructure as code
+- AWS Amplify for frontend hosting
 
 ## Prerequisites
-Before beginning deployment, ensure you have the following tools installed and configured on your system:
 
-1. **Terraform**
-   - Download and install from [https://www.terraform.io/downloads]()
-   - Verify installation:
-   ```bash
-   terraform --version
-   ```
-   - Required version: 1.5.0 or later
+Before beginning deployment, ensure you have the following:
 
-2. **AWS CLI**
-   - Download and install from [https://aws.amazon.com/cli/]()
-   - Verify installation:
+1. **AWS Account Access**
+   - Valid AWS credentials with administrative permissions
+   - Access to AWS Console
+
+2. **Data Requirements**
+   - CSV formatted data files (under 100MB per file)
+   - Complete understanding of data schema and relationships
+
+3. **Network Configuration**
+   - Default VPC available in your AWS region
+   - If default VPC doesn't exist, create using: [AWS VPC Documentation](https://docs.aws.amazon.com/cli/latest/reference/ec2/create-default-vpc.html)
+
+## EC2 Instance Setup
+
+### Create EC2 Instance
+
+1. **Navigate to EC2 Console**
+   - Log into your AWS Console
+   - Search for "EC2" in the services search bar
+   - Click on "EC2" under Services
+
+2. **Launch Instance**
+   - Click "Launch Instance" button
+   - Follow standard deployment documentation instructions
+   - Use default VPC configuration
+   - Wait for instance to reach "running" state
+
+3. **Connect to Instance**
+   - Navigate to the Instances page
+   - Select your created instance
+   - Click "Connect"
+   - Use connection details: Public IP, username: `ec2-user`
+
+> **Note**: Save your instance details for future management operations.
+
+### Install Required Packages
+
+Execute the following commands in your EC2 terminal:
+
+> **Note**: When password prompts appear, press Enter. Use Ctrl+Shift+V for terminal paste operations.
+
+1. **Install Git**
    ```bash
-   aws --version
-   ```
-   - Configure with credentials:
-   ```bash
-   aws configure
+   sudo yum install -y git
    ```
 
-3. **Git**
-   - Download and install from [https://git-scm.com/]()
-   - Verify installation:
+2. **Install Yum Utilities**
+   ```bash
+   sudo yum install -y yum-utils
+   ```
+
+3. **Add HashiCorp Repository**
+   ```bash
+   sudo yum-config-manager --add-repo https://rpm.releases.hashicorp.com/AmazonLinux/hashicorp.repo
+   ```
+
+4. **Install Terraform**
+   ```bash
+   sudo yum install -y terraform
+   ```
+
+5. **Verify Installations**
    ```bash
    git --version
+   terraform version
+   node --version
+   npm --version
    ```
 
-4. **Python and pip** (for document processing scripts)
-   - Download and install from [https://www.python.org/]()
-   - Verify installation:
+### Clone Repository
+
+```bash
+git clone https://github.com/ASUCICREPO/asu-nlq
+```
+
+## Data Dictionary Configuration
+
+### Setup Process
+
+1. **Navigate to Utilities Directory**
    ```bash
-   python --version
-   pip --version
+   cd asu-nlq/Utilities
    ```
 
-5. **Clone the repository**
+2. **Run Schema Manager**
    ```bash
-   git clone https://github.com/ASUCICREPO/asu-nlq
-   cd asu-nlq
+   python3 schema_manager.py
    ```
 
-⚠️ **Important**: Ensure you have appropriate AWS permissions to create Bedrock, OpenSearch, S3, Lambda, and IAM resources before proceeding.
+3. **Configure Data Schema**
+   - Use `--print` flag to view current state
+   - Use `--edit` flag to make modifications
+   - Follow interactive prompts to enter all required information
+   - Document all table names, column names, and descriptions
 
-## AWS Console Setup
+> **Important**: Ensure all attribute names are entered exactly as they appear in your data files. The system requires exact matches to function properly.
 
-### Configure Bedrock Model Access
+## Redshift Database Setup
 
-1. **Navigate to Amazon Bedrock Console**
-   - Log into your AWS Console
-   - Search for "Bedrock" in the services search bar
-   - Click on "Amazon Bedrock" under Services
+### Create Redshift Serverless
 
-2. **Request Model Access**
-   - In the left navigation panel, click "Model access"
-   - Click "Request model access" in the top right corner
-   - Select the following models for this project:
-     - **Amazon Nova Pro** (for natural language to SQL translation)
-     - **Amazon Nova Canvas** (for multi-modal capabilities)
-     - **Amazon Titan Text Embeddings v2** (for semantic understanding)
-   - For each model:
-     - Click "Request model access"
-     - Review and accept the End User License Agreement
-     - Click "Submit"
+1. **Access Redshift Console**
+   - Navigate to AWS Redshift service in the console
+   - Select "Redshift Serverless" from the menu
 
-3. **Verify Model Access**
-   - Wait for model access approval (typically 5-15 minutes)
-   - Refresh the page and ensure all requested models show "Access granted"
-   
-> **Note**: Model access is required before deploying the Terraform infrastructure. The deployment will fail if models are not accessible.
+2. **Create Workgroup**
+   - Click "Create new workgroup"
+   - Enter a descriptive name for the workgroup
+   - Set base capacity: `4`
+   - Set max capacity: `4`
+   - Select default VPC for network and security
+   - Choose default security group
+   - Select all four default subnets
+   - Click "Next" to proceed
 
-⚠️ **Important**: Model access approval is account-specific and may take up to 24 hours in some cases. Plan accordingly for your deployment timeline.
+3. **Create Namespace**
+   - Enter a descriptive name for the namespace
+   - Under permissions, choose "Create new IAM role"
+   - Keep default settings
+   - Click "Create" to finalize setup
 
-### Create S3 Bucket for Knowledge Base
+> **Note**: Record the workgroup and namespace names for later configuration steps.
 
-1. **Navigate to S3 Console**
-   - Log into your AWS Console
-   - Search for "S3" in the services search bar
-   - Click on "S3" under Services
+### Load Data into Redshift
 
-2. **Create Knowledge Base Bucket**
-   - Click the "Create bucket" button in the top right corner
-   - Configure bucket settings:
-     - Bucket name: `asu-nlq-knowledge-base-{unique-suffix}` (e.g., `asu-nlq-knowledge-base-demo-2024`)
-     - Region: Choose your preferred region (recommend `us-east-1` or `us-west-2`)
-     - Keep all other settings at their defaults
-   - Click "Create bucket"
+1. **Access Query Editor**
+   - From the Redshift console left menu, select "Query editor V2"
+   - Connect to your created database (typically named "dev")
 
-3. **Create Document Structure**
-   - Navigate into your newly created bucket
-   - Create the following folder structure for schema and data files:
-     ```
-     schemas/
-     ├── database_schema.sql
-     ├── table_definitions/
-     └── sample_queries/
-     ```
-   - Click "Create folder" for each directory
+2. **Upload Data Files**
+   - Select "Load data" option
+   - Choose "From local file"
+   - Ensure files are in CSV format
 
-> **Note**: Save your bucket name and region, as these will be needed for Terraform variable configuration. This bucket will store database schemas and documentation for the NLQ system.
+3. **Configure Table Creation**
+   - Select "Load new table" in the menu
+   - Choose "public" for the schema
+   - Enter table name from your data dictionary document
+   - Click "Create table and load data"
 
-### Configure IAM User for Terraform
+> **Important**: This process assumes data files are under 100MB. For larger files, use S3 bucket upload method. Data loading may take several minutes to complete.
 
-1. **Navigate to IAM Console**
-   - Log into your AWS Console
-   - Search for "IAM" in the services search bar
-   - Click on "IAM" under Services
+## Knowledge Base Configuration
 
-2. **Create Terraform User**
-   - Click "Users" in the left navigation panel
-   - Click "Create user"
-   - Configure user details:
-     - User name: `terraform-asu-nlq`
-     - AWS access type: Select "Programmatic access"
-   - Click "Next: Permissions"
+### General Setup
 
-3. **Attach Policies**
-   - Select "Attach existing policies directly"
-   - Search for and attach the following AWS managed policies:
-     - `AmazonBedrockFullAccess`
-     - `AmazonRedshiftFullAccess`
-     - `AmazonS3FullAccess`
-     - `IAMFullAccess`
-     - `AWSLambdaFullAccess`
-   - Click "Next: Tags" (skip tags)
-   - Click "Next: Review"
-   - Click "Create user"
+1. **Access Bedrock Console**
+   - Navigate to AWS Bedrock service
+   - In the left menu under "Build", select "Knowledge bases"
+   - Click "Create with structured data store"
 
-4. **Save Credentials**
-   - Copy and securely store the Access Key ID and Secret Access Key
-   - Configure these credentials in your AWS CLI:
-   ```bash
-   aws configure --profile terraform-asu-nlq
+2. **Configure Basic Settings**
+   - Enter a descriptive name and description
+   - Click "Next"
+   - Select the workgroup created in previous steps
+   - Select the "dev" database (or your custom database name)
+
+### Add Data Dictionary
+
+1. **Configure Table Descriptions**
+   - Under "Query configuration", locate "Table and column descriptions"
+   - Load each description from your earlier data dictionary setup
+   - Use format: `dev.public.table_name` for table names
+
+2. **Add Attribute Descriptions**
+   - For whole table description: Enter without any attribute name
+   - For each attribute: Provide exact attribute name and description
+   - Reference your data dictionary document for accurate information
+
+> **Critical**: Attribute names must be entered exactly as they appear in your database. Any discrepancy will cause system failure.
+
+3. **Complete Knowledge Base Creation**
+   - Wait for knowledge base creation to complete
+   - Copy the IAM role from the info link immediately
+   - Format example: `IAMR:AmazonBedrockExecutionRoleForKnowledgeBase_3r2xd`
+   - Save the knowledge base ID for future use
+
+### Grant Permissions
+
+1. **Return to Query Editor**
+   - Navigate back to Redshift Query editor V2
+   - Connect to your database
+
+2. **Execute Permission Commands**
+   Replace `${service-role}` with your copied IAM role and `${schemaName}` with "public":
+
+   ```sql
+   CREATE USER "IAMR:${service-role}" WITH PASSWORD DISABLE;
+   GRANT SELECT ON ALL TABLES IN SCHEMA ${schemaName} TO "IAMR:${serviceRole}";
+   GRANT USAGE ON SCHEMA ${schemaName} TO "IAMR:${serviceRole}";
    ```
 
-⚠️ **Important**: Store these credentials securely and never commit them to version control. Consider using AWS credential profiles for better security management.
+3. **Sync Knowledge Base**
+   - Return to Bedrock Knowledge bases menu
+   - Select your knowledge base
+   - Under "Query engine", click "Sync" to sync data
+   - Wait for synchronization to complete
 
-## Terraform Configuration
+> **Reference**: For detailed information, see [AWS Bedrock Knowledge Base Documentation](https://docs.aws.amazon.com/bedrock/latest/userguide/knowledge-base-build-structured.html)
 
-### Configure Terraform Variables
-
-1. **Navigate to Terraform Directory**
-   ```bash
-   cd terraform/
-   ```
-
-2. **Create Variables File**
-   - Copy the example variables file:
-   ```bash
-   cp terraform.tfvars.example terraform.tfvars
-   ```
-   - Open `terraform.tfvars` in your preferred editor
-
-3. **Configure Required Variables**
-   - Update the following variables with your specific values:
-   ```hcl
-   # AWS Configuration
-   aws_region = "us-east-1"  # Your chosen AWS region
-   aws_profile = "terraform-asu-nlq"  # Your AWS CLI profile name
-   
-   # Project Configuration
-   project_name = "asu-nlq"
-   environment = "production"  # or "development", "staging"
-   
-   # S3 Configuration
-   knowledge_base_bucket_name = "asu-nlq-knowledge-base-demo-2024"  # Your bucket name
-   
-   # Bedrock Configuration
-   embedding_model_id = "amazon.titan-embed-text-v2:0"
-   foundation_model_id = "amazon.nova-pro-v1:0"
-   
-   # Redshift Configuration
-   redshift_cluster_name = "asu-nlq-cluster"
-   redshift_database_name = "asu_nlq_db"
-   redshift_username = "admin"
-   
-   # Knowledge Base Configuration
-   knowledge_base_name = "ASU-NLQ-KnowledgeBase"
-   knowledge_base_description = "Knowledge base for ASU NLQ natural language to SQL query system"
-   
-   # Application Configuration
-   api_name = "asu-nlq-api"
-   lambda_timeout = 300  # 5 minutes
-   lambda_memory = 1024  # MB
-   ```
-
-4. **Validate Variables**
-   - Ensure all bucket names and model IDs match your AWS configuration
-   - Verify region consistency across all resources
-   - Confirm model access has been granted for specified Nova Pro model IDs
-
-> **Note**: The `terraform.tfvars` file should not be committed to version control as it may contain sensitive information.
-
-### Initialize Terraform
-
-1. **Initialize Terraform Backend**
-   ```bash
-   terraform init
-   ```
-   - This command will:
-     - Download required provider plugins (AWS, Redshift)
-     - Initialize the local backend configuration
-     - Create the `.terraform` directory
-
-2. **Verify Initialization**
-   - Ensure no errors occurred during initialization
-   - Check that all required providers (AWS, Redshift) are downloaded
-   - Verify local state configuration
-
-> **Note**: This project uses local Terraform state management. The `terraform.tfstate` file will be created in your project directory and should be handled carefully.
-
-### Plan Deployment
-
-1. **Review Deployment Plan**
-   ```bash
-   terraform plan
-   ```
-   - This command will:
-     - Validate your configuration
-     - Show all resources that will be created
-     - Identify any configuration errors
-
-2. **Analyze Plan Output**
-   - Review the planned resources (typically 15-25 resources)
-   - Verify IAM roles and policies are correctly configured
-   - Confirm S3 bucket and Redshift cluster settings
-   - Check Lambda function configurations
-
-3. **Save Plan (Optional)**
-   ```bash
-   terraform plan -out=deployment.tfplan
-   ```
-
-⚠️ **Important**: Carefully review the plan output before proceeding to deployment. Pay special attention to IAM policies and resource naming conventions.
+## Terraform Deployment
 
 ### Deploy Infrastructure
 
-1. **Apply Terraform Configuration**
+1. **Navigate to Terraform Directory**
    ```bash
+   cd ..
+   cd asu-nlq-terraform
+   ```
+
+2. **Configure Knowledge Base**
+   ```bash
+   python3 setup.py
+   ```
+   - Enter the knowledge base ID when prompted
+
+3. **Set AWS Credentials**
+   ```bash
+   export AWS_ACCESS_KEY_ID=""
+   export AWS_SECRET_ACCESS_KEY=""
+   export AWS_SESSION_TOKEN=""
+   ```
+
+4. **Initialize and Deploy**
+   ```bash
+   terraform init
    terraform apply
    ```
-   - Review the plan one final time
    - Type `yes` when prompted to confirm deployment
-   - Deployment typically takes 8-12 minutes
+   - Wait for deployment completion (several minutes)
 
-2. **Monitor Deployment Progress**
-   - Watch for any error messages during deployment
-   - Note the order of resource creation
-   - Be patient with Redshift cluster creation (longest step)
+5. **Complete Deployment**
+   - Exit the EC2 instance
+   - Stop the instance through AWS Console (do not terminate)
 
-3. **Verify Deployment Completion**
+> **Important**: Keep the EC2 instance for future deployment management, updates, and deletion operations.
+
+### Access Deployed Application
+
+- Navigate to AWS Amplify service in the console
+- Locate your deployed application
+- Access the provided website link
+
+## Stack Management
+
+### How to Delete the Stack
+
+1. **Start EC2 Instance**
+   - Restart the same EC2 instance used for deployment
+
+2. **Navigate to Terraform Directory**
    ```bash
-   terraform output
-   ```
-   - Save the output values for application configuration:
-     - Knowledge Base ID
-     - Redshift Cluster Endpoint
-     - Lambda Function ARNs
-     - S3 Bucket Names
-
-> **Note**: Redshift Serverless cluster creation can take 5-10 minutes. The deployment will wait for completion before proceeding.
-
-⚠️ **Important**: If deployment fails, review error messages carefully. Common issues include insufficient IAM permissions or Nova Pro model access not being granted.
-
-## Knowledge Base Setup
-
-### Upload Schema Documentation
-
-1. **Prepare Schema Files**
-   - Ensure all database schema files are properly formatted:
-     - SQL schema files (.sql)
-     - Table documentation (.md or .txt)
-     - Sample query files (.sql)
-     - Data dictionary files (.csv or .txt)
-   - Organize files by database schema or functional area
-
-2. **Upload to S3 Bucket**
-   - Navigate to your knowledge base S3 bucket in the AWS Console
-   - Upload schema documentation to appropriate folders:
-   ```bash
-   # Using AWS CLI
-   aws s3 cp ./schemas/ s3://your-bucket-name/schemas/ --recursive
-   ```
-   - Or use the AWS Console drag-and-drop interface
-
-3. **Verify Upload**
-   - Confirm all schema files are successfully uploaded
-   - Check file formats and organization
-   - Ensure proper folder structure is maintained
-
-### Sync Knowledge Base
-
-1. **Navigate to Bedrock Console**
-   - Go to Amazon Bedrock in AWS Console
-   - Click "Knowledge bases" in the left navigation panel
-   - Find your knowledge base (should match the name from terraform.tfvars)
-
-2. **Initiate Sync**
-   - Click on your knowledge base name
-   - Navigate to the "Data source" tab
-   - Click "Sync" in the top right corner
-   - Confirm the sync operation
-
-3. **Monitor Sync Progress**
-   - Watch the sync status in the console
-   - Sync typically takes 3-8 minutes depending on schema complexity
-   - Status will change from "Syncing" to "Ready" when complete
-
-⚠️ **Important**: The knowledge base must be synced before the application can understand your database schema and generate appropriate SQL queries. Re-sync whenever you update schema documentation.
-
-## Application Configuration
-
-### Update Environment Variables
-
-1. **Retrieve Terraform Outputs**
-   ```bash
-   cd terraform/
-   terraform output -json > ../outputs.json
+   cd asu-nlq/asu-nlq-terraform
    ```
 
-2. **Configure Application**
-   - Navigate to the application directory:
+3. **Set AWS Credentials**
    ```bash
-   cd ../application/
-   ```
-   - Create or update the environment file:
-   ```bash
-   cp .env.example .env
+   export AWS_ACCESS_KEY_ID=""
+   export AWS_SECRET_ACCESS_KEY=""
+   export AWS_SESSION_TOKEN=""
    ```
 
-3. **Update Environment Variables**
-   - Open `.env` and configure the following:
-   ```env
-   # AWS Configuration
-   AWS_REGION=us-east-1
-   AWS_PROFILE=terraform-asu-nlq
-   
-   # Bedrock Configuration
-   KNOWLEDGE_BASE_ID=XXXXXXXXXX  # From terraform output
-   FOUNDATION_MODEL_ID=amazon.nova-pro-v1:0
-   
-   # Redshift Configuration
-   REDSHIFT_CLUSTER_ENDPOINT=asu-nlq-cluster.xxxxxxxxxx.us-east-1.redshift-serverless.amazonaws.com:5439/asu_nlq_db  # From terraform output
-   REDSHIFT_DATABASE_NAME=asu_nlq_db
-   REDSHIFT_USERNAME=admin
-   
-   # API Configuration
-   API_GATEWAY_URL=https://xxxxxxxxxx.execute-api.us-east-1.amazonaws.com/prod  # From terraform output
-   LAMBDA_FUNCTION_NAME=asu-nlq-query-handler  # From terraform output
-   
-   # Application Settings
-   MAX_TOKENS=4000
-   TEMPERATURE=0.1
-   TOP_P=0.9
-   ```
-
-### Deploy Application
-
-1. **Install Dependencies**
+4. **Destroy Infrastructure**
    ```bash
-   npm install
-   # or
-   pip install -r requirements.txt
-   ```
-
-2. **Build Application**
-   ```bash
-   npm run build
-   # or for Python applications
-   python setup.py build
-   ```
-
-3. **Deploy to Lambda** (if applicable)
-   ```bash
-   # Create deployment package
-   zip -r deployment.zip .
-   
-   # Update Lambda function
-   aws lambda update-function-code \
-     --function-name asu-nlq-query-handler \
-     --zip-file fileb://deployment.zip
-   ```
-
-## Testing and Validation
-
-### Verify Knowledge Base
-
-1. **Test Knowledge Base Query**
-   - Navigate to Bedrock Console
-   - Go to your knowledge base
-   - Click "Test knowledge base" tab
-   - Enter a test query related to your database schema (e.g., "What tables contain customer information?")
-   - Verify relevant schema information is returned
-
-2. **Check Schema Processing**
-   - Ensure all uploaded schema files appear in the data source
-   - Verify schema documentation is properly indexed
-   - Test queries about table relationships and column definitions
-
-### Test Application
-
-1. **Unit Tests**
-   ```bash
-   # Run application tests
-   npm test
-   # or
-   python -m pytest tests/
-   ```
-
-2. **Integration Tests**
-   - Test API endpoints
-   - Verify Lambda function responses
-   - Check error handling and edge cases
-
-3. **End-to-End Testing**
-   - Submit various natural language queries through the application
-   - Verify generated SQL queries are syntactically correct
-   - Test query execution against the Redshift database
-   - Validate returned results match expected data
-
-⚠️ **Important**: Always test with a variety of natural language queries to ensure the system properly understands your database schema and generates valid SQL statements.
-
-## Maintenance
-
-### Update Documents
-
-1. **Add New Schema Files**
-   - Upload new database schema documentation to the appropriate S3 folders
-   - Ensure proper naming conventions and file formats
-   - Trigger knowledge base sync after upload
-
-2. **Modify Existing Schema Documentation**
-   - Replace schema files in S3 bucket when database structure changes
-   - Re-sync knowledge base to update schema understanding
-   - Test natural language queries to verify updates are reflected
-
-3. **Remove Schema Files**
-   - Delete outdated schema documentation from S3 bucket
-   - Sync knowledge base to remove from index
-   - Update any hardcoded references in application code
-
-### Monitor Performance
-
-1. **CloudWatch Monitoring**
-   - Monitor Lambda function metrics:
-     - Duration
-     - Error rate
-     - Invocation count
-   - Set up alarms for unusual patterns
-
-2. **Cost Optimization**
-   - Review Bedrock Nova Pro model usage
-   - Monitor Redshift Serverless compute costs
-   - Optimize Lambda memory allocation based on usage
-
-3. **Knowledge Base Analytics**
-   - Track natural language query patterns and popular database questions
-   - Identify gaps in schema documentation
-   - Optimize SQL generation based on query success rates
-   - Monitor frequently accessed tables and columns
-
-### Destroy Infrastructure
-
-1. **Backup Important Data**
-   - Export any custom configurations
-   - Save important documents from S3
-   - Document any customizations made
-
-2. **Clean Up Resources**
-   ```bash
-   cd terraform/
    terraform destroy
    ```
-   - Type `yes` when prompted to confirm destruction
-   - Monitor progress to ensure all resources are removed
 
-3. **Verify Cleanup**
-   - Check AWS Console to confirm resource deletion
-   - Verify no unexpected charges remain
-   - Remove any manually created resources not managed by Terraform
+> **Note**: Knowledge base and Redshift database must be manually deleted as they are not managed by the Terraform stack. Amplify is managed automatically and does not require manual deletion.
 
-⚠️ **Important**: The destroy operation will permanently delete all resources and data. Ensure you have backups of any important information before proceeding.
+### How to Update Data Dictionary
 
-⚠️ **Important**: The local `terraform.tfstate` file will be updated to reflect the destroyed infrastructure. Keep this file until you're certain all resources are properly cleaned up.
+1. **Start EC2 Instance**
+   - Restart the EC2 instance
+   - Navigate to the Utilities folder
 
-> **Note**: Some resources like S3 buckets with content may require manual cleanup before Terraform can destroy them. Empty buckets before running `terraform destroy`.
+2. **Update Schema**
+   ```bash
+   python3 schema_manager.py --edit
+   ```
+   - Use the interactive program to add/modify database schema and values
+
+3. **Redeploy Infrastructure**
+   ```bash
+   cd ../asu-nlq-terraform
+   ```
+   - Export AWS credentials again
+   - Run `terraform apply`
+
+4. **Update Database**
+   - Navigate to Redshift Query editor V2
+   - Clear existing data
+   - Upload new CSV data with your modifications
+
+5. **Update Knowledge Base**
+   - Navigate to your knowledge base in Bedrock console
+   - Click "Edit"
+   - Under query configuration, add/remove attributes according to changes
+   - Use `schema_manager.py --print` to view required changes
+   - Sync the knowledge base to apply updates
+
+⚠️ **Important**: Always ensure data consistency between your CSV files, Redshift database, and Knowledge Base configuration to maintain system functionality.
