@@ -1,287 +1,493 @@
 #!/usr/bin/env python3
 """
-table_definition_creator.py
+Schema Manager - Database Schema Definition Tool
 
-This script reads a table definition template and guides the user through
-creating a complete table definition following the specified schema.
+This tool manages database schema definition files for natural language query chatbot systems.
+It provides full CRUD operations for tables and columns with an interactive command-line interface.
+
+Usage:
+    python schema_manager.py          # Create new schema file
+    python schema_manager.py --edit   # Edit existing schema file
 """
 
 import json
+import os
 import sys
-from typing import Dict, Any, List, Union
+from pathlib import Path
+from typing import Dict, List, Any, Optional
 
 
-def load_template(filename: str) -> Dict[str, Any]:
-    """Load the table definition template from JSON file."""
-    try:
-        with open(filename, 'r') as f:
-            return json.load(f)
-    except FileNotFoundError:
-        print(f"Error: Template file '{filename}' not found.")
-        sys.exit(1)
-    except json.JSONDecodeError as e:
-        print(f"Error: Invalid JSON in template file: {e}")
-        sys.exit(1)
-
-
-def get_user_input(prompt: str, datatype: str, optional: bool = False, 
-                   example: str = None, possible_values: List = None) -> Any:
-    """Get user input with type validation and optional field handling."""
+class SchemaManager:
+    def __init__(self):
+        self.target_file = Path("../asu-nlq-terraform/S3/asu_facts_table_definition_template.json")
+        self.schema_data = {"tables": []}
+        self.changes_made = False
+        self.modified_tables = set()
     
-    # Build the prompt with example if provided
-    full_prompt = prompt
-    if example:
-        full_prompt += f" (example: {example})"
-    if optional:
-        full_prompt += " [OPTIONAL - press Enter to skip]"
-    full_prompt += ": "
+    def run(self):
+        """Main entry point for the schema manager."""
+        try:
+            edit_mode = "--edit" in sys.argv
+            
+            if edit_mode:
+                self._handle_edit_mode()
+            else:
+                self._handle_create_mode()
+            
+            self._main_menu()
+            
+            if self.changes_made:
+                self._save_schema()
+                self._print_final_summary()
+            else:
+                print("\nNo changes made. Exiting.")
+                
+        except KeyboardInterrupt:
+            print("\n\nOperation cancelled by user.")
+            sys.exit(1)
+        except Exception as e:
+            print(f"\nError: {e}")
+            sys.exit(1)
     
-    while True:
-        user_input = input(full_prompt).strip()
+    def _handle_edit_mode(self):
+        """Handle editing existing schema file."""
+        if not self.target_file.exists():
+            raise FileNotFoundError("No existing schema file found. Run without --edit to create a new file.")
         
-        # Handle optional fields
-        if optional and user_input == "":
+        with open(self.target_file, 'r') as f:
+            self.schema_data = json.load(f)
+        
+        print(f"Loaded existing schema with {len(self.schema_data['tables'])} tables.")
+    
+    def _handle_create_mode(self):
+        """Handle creating new schema file."""
+        if self.target_file.exists():
+            raise FileExistsError("Schema file already exists. Use --edit to modify existing file.")
+        
+        print("Creating new schema file...")
+        # Ensure target directory exists
+        self.target_file.parent.mkdir(parents=True, exist_ok=True)
+    
+    def _main_menu(self):
+        """Display and handle the main menu."""
+        while True:
+            print("\n" + "="*60)
+            print("SCHEMA MANAGER - MAIN MENU")
+            print("="*60)
+            print(f"Current tables: {len(self.schema_data['tables'])}")
+            
+            if self.schema_data['tables']:
+                for i, table in enumerate(self.schema_data['tables'], 1):
+                    print(f"  {i}. {table['table_name']} ({len(table['columns'])} columns)")
+            
+            print("\nOptions:")
+            print("1. Add new table")
+            print("2. View/Edit existing table")
+            print("3. Delete table")
+            print("4. Exit")
+            
+            choice = input("\nSelect option (1-4): ").strip()
+            
+            if choice == '1':
+                self._add_table()
+            elif choice == '2':
+                self._select_table_to_edit()
+            elif choice == '3':
+                self._delete_table()
+            elif choice == '4':
+                break
+            else:
+                print("Invalid option. Please select 1-4.")
+    
+    def _add_table(self):
+        """Add a new table to the schema."""
+        print("\n" + "-"*40)
+        print("ADD NEW TABLE")
+        print("-"*40)
+        
+        table_name = input("Enter table name: ").strip()
+        if not table_name:
+            print("Table name cannot be empty.")
+            return
+        
+        # Check if table already exists
+        if any(table['table_name'] == table_name for table in self.schema_data['tables']):
+            print(f"Table '{table_name}' already exists.")
+            return
+        
+        description = input("Enter table description: ").strip()
+        if not description:
+            print("Table description cannot be empty.")
+            return
+        
+        new_table = {
+            "table_name": table_name,
+            "description": description,
+            "columns": []
+        }
+        
+        # Add columns
+        print("\nNow add columns to this table:")
+        self._add_columns_to_table(new_table)
+        
+        if new_table['columns']:  # Only add if it has columns
+            self.schema_data['tables'].append(new_table)
+            self.changes_made = True
+            self.modified_tables.add(table_name)
+            print(f"\nTable '{table_name}' added successfully!")
+        else:
+            print("\nTable not added - no columns were created.")
+    
+    def _select_table_to_edit(self):
+        """Select a table to view or edit."""
+        if not self.schema_data['tables']:
+            print("\nNo tables exist yet. Add a table first.")
+            return
+        
+        print("\n" + "-"*40)
+        print("SELECT TABLE TO VIEW/EDIT")
+        print("-"*40)
+        
+        for i, table in enumerate(self.schema_data['tables'], 1):
+            print(f"{i}. {table['table_name']}")
+        
+        try:
+            choice = int(input(f"\nSelect table (1-{len(self.schema_data['tables'])}): ").strip())
+            if 1 <= choice <= len(self.schema_data['tables']):
+                self._table_menu(self.schema_data['tables'][choice - 1])
+            else:
+                print("Invalid selection.")
+        except ValueError:
+            print("Please enter a valid number.")
+    
+    def _delete_table(self):
+        """Delete a table from the schema."""
+        if not self.schema_data['tables']:
+            print("\nNo tables exist to delete.")
+            return
+        
+        print("\n" + "-"*40)
+        print("DELETE TABLE")
+        print("-"*40)
+        
+        for i, table in enumerate(self.schema_data['tables'], 1):
+            print(f"{i}. {table['table_name']}")
+        
+        try:
+            choice = int(input(f"\nSelect table to delete (1-{len(self.schema_data['tables'])}): ").strip())
+            if 1 <= choice <= len(self.schema_data['tables']):
+                table_name = self.schema_data['tables'][choice - 1]['table_name']
+                confirm = input(f"Are you sure you want to delete '{table_name}'? (y/n): ").strip().lower()
+                if confirm == 'y':
+                    del self.schema_data['tables'][choice - 1]
+                    self.changes_made = True
+                    self.modified_tables.add(f"{table_name} (DELETED)")
+                    print(f"Table '{table_name}' deleted successfully!")
+                else:
+                    print("Deletion cancelled.")
+            else:
+                print("Invalid selection.")
+        except ValueError:
+            print("Please enter a valid number.")
+    
+    def _table_menu(self, table: Dict[str, Any]):
+        """Display and handle the table-specific menu."""
+        while True:
+            print("\n" + "-"*50)
+            print(f"TABLE: {table['table_name']}")
+            print("-"*50)
+            print(f"Description: {table['description']}")
+            print(f"Columns: {len(table['columns'])}")
+            
+            if table['columns']:
+                for i, col in enumerate(table['columns'], 1):
+                    print(f"  {i}. {col['column_name']} ({col['data_type']})")
+            
+            print("\nOptions:")
+            print("1. Add column")
+            print("2. Edit column")
+            print("3. Delete column")
+            print("4. Edit table name/description")
+            print("5. Back to main menu")
+            
+            choice = input("\nSelect option (1-5): ").strip()
+            
+            if choice == '1':
+                self._add_columns_to_table(table)
+            elif choice == '2':
+                self._edit_column(table)
+            elif choice == '3':
+                self._delete_column(table)
+            elif choice == '4':
+                self._edit_table_info(table)
+            elif choice == '5':
+                break
+            else:
+                print("Invalid option. Please select 1-5.")
+    
+    def _add_columns_to_table(self, table: Dict[str, Any]):
+        """Add columns to a table."""
+        while True:
+            column = self._create_column()
+            if column:
+                table['columns'].append(column)
+                self.changes_made = True
+                self.modified_tables.add(table['table_name'])
+                print(f"Column '{column['column_name']}' added successfully!")
+            
+            if not self._ask_yes_no("Add another column?"):
+                break
+    
+    def _create_column(self) -> Optional[Dict[str, Any]]:
+        """Create a single column with all required fields."""
+        print("\n" + "-"*30)
+        print("ADD NEW COLUMN")
+        print("-"*30)
+        
+        column_name = input("Enter column name: ").strip()
+        if not column_name:
+            print("Column name cannot be empty.")
             return None
         
-        # Handle required fields
-        if not optional and user_input == "":
-            print("This field is required. Please provide a value.")
-            continue
+        data_type = input("Enter data type (e.g., VARCHAR(50), INTEGER): ").strip()
+        if not data_type:
+            print("Data type cannot be empty.")
+            return None
         
-        # Type conversion and validation
+        description = input("Enter column description: ").strip()
+        if not description:
+            print("Column description cannot be empty.")
+            return None
+        
+        # Get possible values
+        possible_values = []
+        print("\nEnter possible values for this column:")
+        while True:
+            value = input("Enter possible value (or press Enter to finish): ").strip()
+            if not value:
+                break
+            possible_values.append(value)
+        
+        if not possible_values:
+            print("At least one possible value is required.")
+            return None
+        
+        return {
+            "column_name": column_name,
+            "data_type": data_type,
+            "description": description,
+            "possible_values": possible_values
+        }
+    
+    def _edit_column(self, table: Dict[str, Any]):
+        """Edit an existing column."""
+        if not table['columns']:
+            print("\nNo columns exist to edit.")
+            return
+        
+        print("\n" + "-"*40)
+        print("SELECT COLUMN TO EDIT")
+        print("-"*40)
+        
+        for i, col in enumerate(table['columns'], 1):
+            print(f"{i}. {col['column_name']}")
+        
         try:
-            if datatype.lower() == "string":
-                if possible_values and user_input not in possible_values:
-                    print(f"Invalid value. Must be one of: {possible_values}")
-                    continue
-                return user_input
-            
-            elif datatype.lower() == "number":
-                return int(user_input) if user_input.isdigit() else float(user_input)
-            
-            elif datatype.lower() == "boolean":
-                if user_input.lower() in ['true', 't', 'yes', 'y', '1']:
-                    return True
-                elif user_input.lower() in ['false', 'f', 'no', 'n', '0']:
-                    return False
-                else:
-                    print("Please enter a boolean value (true/false, yes/no, 1/0)")
-                    continue
-            
-            elif datatype.lower() == "array":
-                if user_input:
-                    # For simple arrays, split by comma
-                    return [item.strip() for item in user_input.split(',') if item.strip()]
-                return []
-            
+            choice = int(input(f"\nSelect column (1-{len(table['columns'])}): ").strip())
+            if 1 <= choice <= len(table['columns']):
+                self._column_edit_menu(table, table['columns'][choice - 1])
             else:
-                return user_input
-                
+                print("Invalid selection.")
         except ValueError:
-            print(f"Invalid input for {datatype}. Please try again.")
-            continue
-
-
-def collect_column_data(template_column: Dict[str, Any]) -> Dict[str, Any]:
-    """Collect data for a single column definition."""
-    print("\n--- Column Definition ---")
-    column_data = {}
+            print("Please enter a valid number.")
     
-    for field_name, field_def in template_column.items():
-        if isinstance(field_def, dict) and 'datatype' in field_def:
-            description = field_def.get('description', '')
-            datatype = field_def.get('datatype')
-            optional = field_def.get('optional', True)
-            example = field_def.get('example')
-            possible_values = field_def.get('possible_values')
+    def _column_edit_menu(self, table: Dict[str, Any], column: Dict[str, Any]):
+        """Menu for editing a specific column."""
+        while True:
+            print("\n" + "-"*40)
+            print(f"EDIT COLUMN: {column['column_name']}")
+            print("-"*40)
+            print(f"Data Type: {column['data_type']}")
+            print(f"Description: {column['description']}")
+            print(f"Possible Values: {', '.join(column['possible_values'])}")
             
-            value = get_user_input(
-                f"{field_name} - {description}",
-                datatype,
-                optional,
-                example,
-                possible_values
-            )
+            print("\nWhat would you like to edit?")
+            print("1. Column name")
+            print("2. Data type")
+            print("3. Description")
+            print("4. Possible values")
+            print("5. Done editing this column")
             
-            if value is not None:
-                column_data[field_name] = value
-    
-    return column_data
-
-
-def collect_index_data(template_index: Dict[str, Any]) -> Dict[str, Any]:
-    """Collect data for a single index definition."""
-    print("\n--- Index Definition ---")
-    index_data = {}
-    
-    for field_name, field_def in template_index.items():
-        if isinstance(field_def, dict) and 'datatype' in field_def:
-            description = field_def.get('description', '')
-            datatype = field_def.get('datatype')
-            optional = field_def.get('optional', True)
-            example = field_def.get('example')
+            choice = input("\nSelect option (1-5): ").strip()
             
-            value = get_user_input(
-                f"{field_name} - {description}",
-                datatype,
-                optional,
-                example
-            )
+            if choice == '1':
+                new_name = input(f"Enter new column name (current: {column['column_name']}): ").strip()
+                if new_name:
+                    column['column_name'] = new_name
+                    self.changes_made = True
+                    self.modified_tables.add(table['table_name'])
+            elif choice == '2':
+                new_type = input(f"Enter new data type (current: {column['data_type']}): ").strip()
+                if new_type:
+                    column['data_type'] = new_type
+                    self.changes_made = True
+                    self.modified_tables.add(table['table_name'])
+            elif choice == '3':
+                new_desc = input(f"Enter new description (current: {column['description']}): ").strip()
+                if new_desc:
+                    column['description'] = new_desc
+                    self.changes_made = True
+                    self.modified_tables.add(table['table_name'])
+            elif choice == '4':
+                self._edit_possible_values(table, column)
+            elif choice == '5':
+                break
+            else:
+                print("Invalid option. Please select 1-5.")
+    
+    def _edit_possible_values(self, table: Dict[str, Any], column: Dict[str, Any]):
+        """Edit possible values for a column."""
+        while True:
+            print("\n" + "-"*30)
+            print("EDIT POSSIBLE VALUES")
+            print("-"*30)
+            print("Current values:")
+            for i, value in enumerate(column['possible_values'], 1):
+                print(f"  {i}. {value}")
             
-            if value is not None:
-                index_data[field_name] = value
-    
-    return index_data
-
-
-def collect_relationship_data(template_relationship: Dict[str, Any]) -> Dict[str, Any]:
-    """Collect data for a single relationship definition."""
-    print("\n--- Relationship Definition ---")
-    relationship_data = {}
-    
-    for field_name, field_def in template_relationship.items():
-        if isinstance(field_def, dict) and 'datatype' in field_def:
-            description = field_def.get('description', '')
-            datatype = field_def.get('datatype')
-            optional = field_def.get('optional', True)
-            example = field_def.get('example')
+            print("\nOptions:")
+            print("1. Add new value")
+            print("2. Remove value")
+            print("3. Done editing values")
             
-            value = get_user_input(
-                f"{field_name} - {description}",
-                datatype,
-                optional,
-                example
-            )
+            choice = input("\nSelect option (1-3): ").strip()
             
-            if value is not None:
-                relationship_data[field_name] = value
+            if choice == '1':
+                new_value = input("Enter new possible value: ").strip()
+                if new_value and new_value not in column['possible_values']:
+                    column['possible_values'].append(new_value)
+                    self.changes_made = True
+                    self.modified_tables.add(table['table_name'])
+                    print(f"Added value: {new_value}")
+                elif new_value in column['possible_values']:
+                    print("Value already exists.")
+            elif choice == '2':
+                if len(column['possible_values']) <= 1:
+                    print("Cannot remove the last possible value.")
+                    continue
+                try:
+                    idx = int(input(f"Select value to remove (1-{len(column['possible_values'])}): ")) - 1
+                    if 0 <= idx < len(column['possible_values']):
+                        removed = column['possible_values'].pop(idx)
+                        self.changes_made = True
+                        self.modified_tables.add(table['table_name'])
+                        print(f"Removed value: {removed}")
+                    else:
+                        print("Invalid selection.")
+                except ValueError:
+                    print("Please enter a valid number.")
+            elif choice == '3':
+                break
+            else:
+                print("Invalid option. Please select 1-3.")
     
-    return relationship_data
-
-
-def collect_array_data(field_name: str, template_item: Dict[str, Any], 
-                      collector_func) -> List[Dict[str, Any]]:
-    """Collect data for array fields (columns, indexes, relationships)."""
-    items = []
-    
-    while True:
-        print(f"\n=== Adding {field_name[:-1]} (currently have {len(items)}) ===")
-        print("Press Enter without typing anything to finish adding items.")
+    def _delete_column(self, table: Dict[str, Any]):
+        """Delete a column from a table."""
+        if not table['columns']:
+            print("\nNo columns exist to delete.")
+            return
         
-        if input("Add another item? (Enter to finish, any key to continue): ").strip() == "":
-            break
-            
-        item_data = collector_func(template_item)
-        if item_data:
-            items.append(item_data)
+        print("\n" + "-"*40)
+        print("DELETE COLUMN")
+        print("-"*40)
+        
+        for i, col in enumerate(table['columns'], 1):
+            print(f"{i}. {col['column_name']}")
+        
+        try:
+            choice = int(input(f"\nSelect column to delete (1-{len(table['columns'])}): ").strip())
+            if 1 <= choice <= len(table['columns']):
+                col_name = table['columns'][choice - 1]['column_name']
+                confirm = input(f"Are you sure you want to delete column '{col_name}'? (y/n): ").strip().lower()
+                if confirm == 'y':
+                    del table['columns'][choice - 1]
+                    self.changes_made = True
+                    self.modified_tables.add(table['table_name'])
+                    print(f"Column '{col_name}' deleted successfully!")
+                else:
+                    print("Deletion cancelled.")
+            else:
+                print("Invalid selection.")
+        except ValueError:
+            print("Please enter a valid number.")
     
-    return items if items else None
-
-
-def sanitize_filename(filename: str) -> str:
-    """Sanitize a string to be safe for use as a filename."""
-    # Replace problematic characters with underscores
-    invalid_chars = '<>:"/\\|?*'
-    for char in invalid_chars:
-        filename = filename.replace(char, '_')
+    def _edit_table_info(self, table: Dict[str, Any]):
+        """Edit table name and description."""
+        print("\n" + "-"*40)
+        print("EDIT TABLE INFORMATION")
+        print("-"*40)
+        print(f"Current name: {table['table_name']}")
+        print(f"Current description: {table['description']}")
+        
+        new_name = input(f"\nEnter new table name (press Enter to keep current): ").strip()
+        if new_name:
+            old_name = table['table_name']
+            table['table_name'] = new_name
+            self.changes_made = True
+            # Update the modified_tables set
+            if old_name in self.modified_tables:
+                self.modified_tables.remove(old_name)
+            self.modified_tables.add(new_name)
+        
+        new_desc = input(f"Enter new description (press Enter to keep current): ").strip()
+        if new_desc:
+            table['description'] = new_desc
+            self.changes_made = True
+            self.modified_tables.add(table['table_name'])
     
-    # Remove leading/trailing whitespace and dots
-    filename = filename.strip(' .')
+    def _ask_yes_no(self, question: str) -> bool:
+        """Ask a yes/no question and return boolean result."""
+        while True:
+            answer = input(f"{question} (y/n): ").strip().lower()
+            if answer in ('y', 'yes'):
+                return True
+            elif answer in ('n', 'no'):
+                return False
+            else:
+                print("Please enter 'y' or 'n'.")
     
-    # Ensure it's not empty
-    if not filename:
-        filename = "table"
+    def _save_schema(self):
+        """Save the schema to the target file."""
+        with open(self.target_file, 'w') as f:
+            json.dump(self.schema_data, f, indent=2)
+        print(f"\nSchema saved to: {self.target_file}")
     
-    return filename
+    def _print_final_summary(self):
+        """Print a summary of modified tables for easy copy/paste."""
+        print("\n" + "="*80)
+        print("FINAL SUMMARY - MODIFIED TABLES")
+        print("="*80)
+        
+        for table in self.schema_data['tables']:
+            if table['table_name'] in self.modified_tables or any('DELETED' in name for name in self.modified_tables):
+                print(f"\nTable: {table['table_name']}")
+                print(f"Description: {table['description']}")
+                print("Columns:")
+                for column in table['columns']:
+                    print(f"  - {column['column_name']}: {column['description']}")
+        
+        # Show deleted tables
+        deleted_tables = [name for name in self.modified_tables if 'DELETED' in name]
+        if deleted_tables:
+            print("\nDeleted Tables:")
+            for table_name in deleted_tables:
+                print(f"  - {table_name}")
 
 
 def main():
-    """Main function to orchestrate the table definition creation."""
-    print("=== Database Table Definition Creator ===")
-    print("This tool will help you create a complete table definition.")
-    print("Required fields must be filled. Optional fields can be skipped by pressing Enter.\n")
-    
-    # Load template
-    template = load_template("../Assets/table_definition_template.json")
-    
-    # Initialize output data
-    output_data = {}
-    table_name = None
-    
-    # Process each top-level field in the template
-    for field_name, field_def in template.items():
-        if not isinstance(field_def, dict) or 'datatype' not in field_def:
-            continue
-            
-        description = field_def.get('description', '')
-        datatype = field_def.get('datatype')
-        optional = field_def.get('optional', True)
-        example = field_def.get('example')
-        
-        print(f"\n=== {field_name.upper()} ===")
-        
-        # Handle special array fields with complex objects
-        if field_name == "columns" and datatype == "Array":
-            print("Now collecting column definitions...")
-            template_column = field_def['example'][0] if field_def.get('example') else {}
-            columns = collect_array_data(field_name, template_column, collect_column_data)
-            if columns:
-                output_data[field_name] = columns
-        
-        elif field_name == "indexes" and datatype == "Array":
-            print("Now collecting index definitions...")
-            template_index = field_def['example'][0] if field_def.get('example') else {}
-            indexes = collect_array_data(field_name, template_index, collect_index_data)
-            if indexes:
-                output_data[field_name] = indexes
-        
-        elif field_name == "relationships" and datatype == "Array":
-            print("Now collecting relationship definitions...")
-            template_relationship = field_def['example'][0] if field_def.get('example') else {}
-            relationships = collect_array_data(field_name, template_relationship, collect_relationship_data)
-            if relationships:
-                output_data[field_name] = relationships
-        
-        else:
-            # Handle simple fields
-            value = get_user_input(
-                f"{field_name} - {description}",
-                datatype,
-                optional,
-                example
-            )
-            
-            if value is not None:
-                output_data[field_name] = value
-                
-                # Capture table name for filename
-                if field_name == "table_name":
-                    table_name = value
-    
-    # Create output filename with table name prefix
-    if table_name:
-        sanitized_name = sanitize_filename(table_name)
-        output_filename = f"{sanitized_name}_output.json"
-    else:
-        output_filename = "output.json"
-    
-    # Save output
-    try:
-        with open(output_filename, 'w') as f:
-            json.dump(output_data, f, indent=2)
-        print(f"\n✅ Table definition saved to '{output_filename}'")
-        print(f"Created definition for table: {output_data.get('table_name', 'Unknown')}")
-        
-        # Show summary
-        column_count = len(output_data.get('columns', []))
-        index_count = len(output_data.get('indexes', []))
-        relationship_count = len(output_data.get('relationships', []))
-        
-        print(f"Summary: {column_count} columns, {index_count} indexes, {relationship_count} relationships")
-        
-    except Exception as e:
-        print(f"Error saving output file: {e}")
-        sys.exit(1)
+    """Main entry point."""
+    manager = SchemaManager()
+    manager.run()
 
 
 if __name__ == "__main__":
