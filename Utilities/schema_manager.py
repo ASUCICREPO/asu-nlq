@@ -8,6 +8,7 @@ It provides full CRUD operations for tables and columns with an interactive comm
 Usage:
     python schema_manager.py          # Create new schema file
     python schema_manager.py --edit   # Edit existing schema file
+    python schema_manager.py --print  # Print current schema state
 """
 
 import json
@@ -28,6 +29,11 @@ class SchemaManager:
         """Main entry point for the schema manager."""
         try:
             edit_mode = "--edit" in sys.argv
+            print_mode = "--print" in sys.argv
+            
+            if print_mode:
+                self._handle_print_mode()
+                return
             
             if edit_mode:
                 self._handle_edit_mode()
@@ -59,7 +65,39 @@ class SchemaManager:
         
         print(f"Loaded existing schema with {len(self.schema_data['tables'])} tables.")
     
-    def _handle_create_mode(self):
+    def _handle_print_mode(self):
+        """Handle printing current schema file."""
+        if not self.target_file.exists():
+            print("No existing schema file found.")
+            return
+        
+        with open(self.target_file, 'r') as f:
+            self.schema_data = json.load(f)
+        
+        print("="*80)
+        print("CURRENT SCHEMA STATE")
+        print("="*80)
+        
+        if not self.schema_data.get('tables'):
+            print("No tables found in schema.")
+            return
+        
+        for table in self.schema_data['tables']:
+            print(f"\nTable: {table['table_name']}")
+            print(f"Description: {table['description']}")
+            print("Columns:")
+            for column in table['columns']:
+                print(f"  - {column['column_name']}: {column['description']}")
+                if column.get('possible_values'):
+                    values_str = ', '.join(column['possible_values'])
+                    if len(values_str) > 100:
+                        values_str = values_str[:97] + "..."
+                    print(f"    Data Type: {column['data_type']}")
+                    print(f"    Possible Values: {values_str}")
+                else:
+                    print(f"    Data Type: {column['data_type']}")
+                    print(f"    Possible Values: None specified")
+    
         """Handle creating new schema file."""
         if self.target_file.exists():
             raise FileExistsError("Schema file already exists. Use --edit to modify existing file.")
