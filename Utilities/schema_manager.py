@@ -85,18 +85,12 @@ class SchemaManager:
         for table in self.schema_data['tables']:
             print(f"\nTable: {table['table_name']}")
             print(f"Description: {table['description']}")
-            print("Columns:")
+            print("\nColumns:")
+            
             for column in table['columns']:
-                print(f"  - {column['column_name']}: {column['description']}")
-                if column.get('possible_values'):
-                    values_str = ', '.join(column['possible_values'])
-                    if len(values_str) > 100:
-                        values_str = values_str[:97] + "..."
-                    print(f"    Data Type: {column['data_type']}")
-                    print(f"    Possible Values: {values_str}")
-                else:
-                    print(f"    Data Type: {column['data_type']}")
-                    print(f"    Possible Values: None specified")
+                print(f"\n  - {column['column_name']}: {column['description']}")
+            
+            print("\n" + "-"*60)
     
     def _handle_create_mode(self):
         """Handle creating new schema file."""

@@ -78,11 +78,13 @@
       {
         "column_name": "Student_Level",
         "data_type": "VARCHAR(50)",
+        "description": "A string value indicates the student level.",
         "possible_values": ["Freshman", "Graduate", "Junior", "Non-Degree Graduate", "Non-Degree Undergraduate", "Senior", "Sophomore"]
       },
       {
         "column_name": "Academic_Level",
         "data_type": "VARCHAR(50)",
+        "description": "A string value indicates the academic level of students.",
         "possible_values": ["Doctoral", "First Professional", "Freshman", "Junior", "Masters", "Non-Degree Graduate", "Non-Degree Undergraduate", "Senior", "Sophomore"]
       },
       {
